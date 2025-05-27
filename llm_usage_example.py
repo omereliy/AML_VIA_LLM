@@ -1,4 +1,4 @@
-import langchain
+from langchain import MultiLLMAgent
 # Quick start
 agent = MultiLLMAgent()
 agent.add_llm_provider("claude", "anthropic")
