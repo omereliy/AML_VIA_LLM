@@ -1,0 +1,2 @@
+class Investigator:
+    pass
