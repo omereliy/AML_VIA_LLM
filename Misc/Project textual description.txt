@@ -1,0 +1,32 @@
+System layout:
+- Multiple LLM agent
+- Python code
+- Textual input
+- PDDL output
+
+Input: a textual description of a problem domain, written in natural language of the user, presumably the textual description should be enough for generating a pddl domain.
+
+
+Ouptut: a pddl domain file in text, consisting of:
+	- domain name
+	- types
+	- constants
+	- predicates
+	- functions
+	- actions
+
+Entities:
+
+- User: only inputs the textual description of the problem, and receives the pddl output
+- LLM Agents:
+	- Formalizer: has two tasks, and is an expert on both:
+		1. Formalization of the textual description of the problem
+		2. Re-formalization of the textual description of the problem with added context of stuff that went wrong in the first place
+	- Success Rate Critic: has a single task, as the name suggests, given the textual description of the problem and the formalized domain given to it by the Formalizer, it can generate a success rate of how much the formalized domain and the text seem fit.
+							It also acts as a gatekeeper regarding said success rate, if the success rate is lower than a given threshold, it lets the formalized domain and textual description through to the next LLM agents - the investigators (their description will come shortly).
+							But if the success rate is higher than said threshold, it outputs the formalized pddl domain to the user as pddl text, without any further small talk, prefixes, tips or whatever, just plain pddl, as if it were a file later used as a normal file.
+	- Investigators: there are 3 specialized investigators, one for Action Signatures, one for Effects and Preconditions, and one for Typing.
+						All 3 investigators - as their name suggests - investigate problems in the formalized pddl domain with respect to their profession.
+						For instance, the action signature domain goes through the textual description of the domain, and the formalized pddl domain, and outputs bugs regarding the actions' signatures inside the formalized domain
+- Python code:
+	- Combinator: a module in the code that receives the output of all three investigators, and constructs a user prompt using their output and the original textual description of the domain, then outputs this user prompt to the formalizer, so it can re-formalize the formalized pddl domain.
