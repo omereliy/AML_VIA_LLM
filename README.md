@@ -1,4 +1,4 @@
-# AML_VIA_LLM
+# Multi-Agent LLM Refinement for Action Model Learning
 learning action models via textual description by iterative refinement through error detection and testing by LLM agents
 ## requirments:
 * LangChain framework - Main orchestration
