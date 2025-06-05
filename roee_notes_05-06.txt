@@ -13,6 +13,6 @@
 
 TODO:
 work on system prompts (medium-hard)
-work on combinator (medium-hard)
+work on combinator (medium)
 get api keys for what we want to test (medium - because need to decide which would be worthwhile)
 might need to add PDDLDomain class method of parsing the class to pddl file or text
