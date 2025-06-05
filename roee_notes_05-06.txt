@@ -1,0 +1,18 @@
+#46++ - Ollama means local models - not sure it's feasible.
+
+#54++ - pretty sure base_url is not a thing..? doesn't do anything if it's not llama
+
+#55++ - temperature needs to be much lower imho.. also is set so many times to 2k, just take it from the dataclass???
+
+#77 -maybe change 'investigator_type' to enum?
+
+#78 - not sure if severity_scores are needed, maybe we can experiment with and without
+
+#737 - combinator does not use original_description whatsoeer
+
+
+TODO:
+work on system prompts (medium-hard)
+work on combinator (medium-hard)
+get api keys for what we want to test (medium - because need to decide which would be worthwhile)
+might need to add PDDLDomain class method of parsing the class to pddl file or text
