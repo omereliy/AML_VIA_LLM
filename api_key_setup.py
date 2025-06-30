@@ -56,19 +56,19 @@ def create_env_template():
 # Get these from the respective provider websites
 
 # Anthropic Claude - https://console.anthropic.com
-ANTHROPIC_API_KEY=your_anthropic_key_here
+ANTHROPIC_API_KEY=your_api_key_here
 
 # OpenAI ChatGPT/GPT-4 - https://platform.openai.com
-OPENAI_API_KEY=your_openai_key_here
+OPENAI_API_KEY=your_api_key_here
 
 # Google Gemini - https://aistudio.google.com
-GOOGLE_API_KEY=your_google_key_here
+GOOGLE_API_KEY=your_api_key_here
 
 # Cohere - https://dashboard.cohere.com
-COHERE_API_KEY=your_cohere_key_here
+COHERE_API_KEY=your_api_key_here
 
 # Ollama (Local) - https://ollama.ai
-OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_BASE_URL=your_api_key_here
 """
     
     if not os.path.exists('.env'):
@@ -79,7 +79,7 @@ OLLAMA_BASE_URL=http://localhost:11434
     else:
         print("⚠️  .env file already exists")
 
-def test_connections():
+def verify_connections():
     """Test connections to available APIs"""
     
     load_dotenv()
@@ -88,7 +88,7 @@ def test_connections():
     print("-" * 30)
     
     # Test Anthropic
-    if os.getenv('ANTHROPIC_API_KEY') and os.getenv('ANTHROPIC_API_KEY') != 'your_anthropic_key_here':
+    if os.getenv('ANTHROPIC_API_KEY') and os.getenv('ANTHROPIC_API_KEY') != 'your_api_key_here':
         try:
             from langchain_anthropic import ChatAnthropic
             llm = ChatAnthropic(
@@ -101,7 +101,7 @@ def test_connections():
             print(f"❌ Anthropic (Claude): Error - {str(e)[:50]}...")
     
     # Test OpenAI
-    if os.getenv('OPENAI_API_KEY') and os.getenv('OPENAI_API_KEY') != 'your_openai_key_here':
+    if os.getenv('OPENAI_API_KEY') and os.getenv('OPENAI_API_KEY') != 'your_api_key_here':
         try:
             from langchain_openai import ChatOpenAI
             llm = ChatOpenAI(
@@ -111,10 +111,10 @@ def test_connections():
             response = llm.invoke("Hello! Just testing the connection.")
             print("✅ OpenAI (ChatGPT): Connected")
         except Exception as e:
-            print(f"❌ OpenAI (ChatGPT): Error - {str(e)[:50]}...")
+            print(f"❌ OpenAI (ChatGPT): Error - {str(e)}")
     
     # Test Google
-    if os.getenv('GOOGLE_API_KEY') and os.getenv('GOOGLE_API_KEY') != 'your_google_key_here':
+    if os.getenv('GOOGLE_API_KEY') and os.getenv('GOOGLE_API_KEY') != 'your_api_key_here':
         try:
             from langchain_google_genai import ChatGoogleGenerativeAI
             llm = ChatGoogleGenerativeAI(
@@ -127,7 +127,7 @@ def test_connections():
             print(f"❌ Google (Gemini): Error - {str(e)[:50]}...")
     
     # Test Cohere
-    if os.getenv('COHERE_API_KEY') and os.getenv('COHERE_API_KEY') != 'your_cohere_key_here':
+    if os.getenv('COHERE_API_KEY') and os.getenv('COHERE_API_KEY') != 'your_api_key_here':
         try:
             from langchain_cohere import ChatCohere
             llm = ChatCohere(
@@ -151,7 +151,7 @@ if __name__ == "__main__":
     if has_keys:
         # Test connections if we have some keys
         try:
-            test_connections()
+            verify_connections()
         except ImportError as e:
             print(f"\n⚠️  Install required packages first: pip install -r requirements.txt")
     

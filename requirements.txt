@@ -1,7 +1,7 @@
 # Core LangChain framework
-langchain==0.1.20
-langchain-core==0.1.52
-langchain-community==0.0.38
+langchain==0.2.9
+langchain-core==0.3.15
+langchain-community==0.3.1
 
 # LLM Provider integrations
 langchain-anthropic==0.1.15
@@ -17,7 +17,7 @@ python-dotenv==1.0.1
 # Additional utilities for enhanced functionality
 pydantic==2.7.1
 numpy==1.24.3
-requests==2.31.0
+requests==2.32.4
 
 # Optional: For document processing and embeddings
 langchain-text-splitters==0.0.1
@@ -30,7 +30,7 @@ pyyaml==6.0.1
 
 # Optional: For web scraping and data extraction
 beautifulsoup4==4.12.2
-selenium==4.15.0
+selenium==4.15.1
 
 # Optional: For database connectivity
 sqlalchemy==2.0.19
@@ -41,11 +41,11 @@ structlog==23.1.0
 rich==13.4.2
 
 # Optional: For async operations
-aiohttp==3.8.5
+aiohttp==3.10.11
 asyncio==3.4.3
 
 # Development and testing (optional)
 pytest==7.4.0
 pytest-asyncio==0.21.1
-black==23.7.0
+black==24.3.0
 flake8==6.0.0
