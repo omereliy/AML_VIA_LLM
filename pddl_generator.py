@@ -810,12 +810,12 @@ class Combinator:
     def combine_reports(reports: List[InvestigationReport], original_description: str) -> str:
         """Combine investigation reports into a feedback prompt"""
         logger.info("Combining investigation reports")
-        
-        feedback_parts = [
+
+        feedback_parts = [original_description,
             "Issues identified during domain analysis:",
             ""
         ]
-        
+
         for report in reports:
             if report.issues_found:
                 feedback_parts.append(f"=== {report.investigator_type} Issues ===")
@@ -827,7 +827,16 @@ class Combinator:
                 for suggestion in report.suggestions:
                     feedback_parts.append(f"- {suggestion}")
                 feedback_parts.append("")
-        
+
+        if len(feedback_parts) == 3:  # Only original description and header
+            feedback_parts.append("No issues found by any investigator.")
+
+        feedback_parts.append("=== End of Issues ===")
+        feedback_parts.append("Please use this feedback to improve the PDDL domain. Focus on addressing all identified issues and suggestions.")
+
+        logger.debug("Finished combining reports, here's the feedback prompt:")
+        logger.debug("\n".join(feedback_parts))
+
         return "\n".join(feedback_parts)
 
 class PDDLGeneratorSystem:
