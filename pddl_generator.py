@@ -37,7 +37,7 @@ import argparse
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
+console_handler.setLevel(logging.DEBUG)
 formatter = logging.Formatter('[%(asctime)s] - %(name)s - %(levelname)s - %(message)s', datefmt='%d/%m/%Y|%H:%M:%S')
 
 logger.addHandler(console_handler)
@@ -107,7 +107,7 @@ model_name_to_provider_name = {
 }
 
 #HYPERPARAMETERS
-DEFAULT_SUCCESS_THRESHOLD = 0.8
+DEFAULT_SUCCESS_THRESHOLD = 0.95
 DEFAULT_MAX_ITERATIONS = 3
 
 class LLMProvider(Enum):
@@ -500,6 +500,7 @@ Guidelines:
 Generate a complete PDDL domain definition:"""
         
         pddl_text = self.llm.generate(prompt, self.system_prompt)
+        logger.debug(f"========================\n[{self.name}] Generated PDDL text after initial formalization:\n {pddl_text}\n========================")
         return self._parse_pddl_domain(pddl_text, natural_language_description)
     
     def re_formalization(self, original_description: str, feedback_prompt: str) -> PDDLDomain:
@@ -514,6 +515,7 @@ Issues Found and Feedback:
 Please generate an improved PDDL domain that addresses all the identified issues while maintaining the core functionality described in the original description:"""
         
         pddl_text = self.llm.generate(prompt, self.system_prompt)
+        logger.debug(f"========================\n[{self.name}] Generated PDDL text after re-formalization:\n {pddl_text}\n========================")
         return self._parse_pddl_domain(pddl_text, original_description)
     
     def _parse_pddl_domain(self, pddl_text: str, original_description: str) -> PDDLDomain:
@@ -669,6 +671,7 @@ SUGGESTION: [How to fix this issue]
 If no issues are found, respond with "NO_ISSUES_FOUND"."""
         
         response = self.llm.generate(prompt, self.system_prompt)
+        logger.debug(f"========================\n[{self.name}] Investigation Response:\n {response}\n========================")
         return self._parse_investigation_response(response)
     
     def _parse_investigation_response(self, response: str) -> InvestigationReport:
@@ -746,6 +749,7 @@ Focus on these aspects:
 Format: ISSUE: / SEVERITY: / SUGGESTION: / --- (repeat)"""
         
         response = self.llm.generate(prompt, self.system_prompt)
+        logger.debug(f"========================\n[{self.name}] Investigation Response:\n {response}\n========================")
         return self._parse_investigation_response(response)
 
 class EffectsAndPreconditionsInvestigator(InvestigatorAgent):
@@ -774,6 +778,7 @@ Focus on these aspects:
 Format: ISSUE: / SEVERITY: / SUGGESTION: / --- (repeat)"""
         
         response = self.llm.generate(prompt, self.system_prompt)
+        logger.debug(f"========================\n[{self.name}] Investigation Response:\n {response}\n========================")
         return self._parse_investigation_response(response)
 
 class TypingInvestigator(InvestigatorAgent):
@@ -802,6 +807,7 @@ Focus on these aspects:
 Format: ISSUE: / SEVERITY: / SUGGESTION: / --- (repeat)"""
         
         response = self.llm.generate(prompt, self.system_prompt)
+        logger.debug(f"========================\n[{self.name}] Investigation Response:\n {response}\n========================")
         return self._parse_investigation_response(response)
 
 class Combinator:
