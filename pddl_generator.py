@@ -41,50 +41,6 @@ formatter = logging.Formatter('[%(asctime)s] - %(name)s - %(levelname)s - %(mess
 logger.addHandler(console_handler)
 console_handler.setFormatter(formatter)
 
-# Dictionary mapping of model names to provider names
-model_name_to_provider_name = {
-    # OpenAI
-    'gpt-4.1': 'OPENAI',
-    'gpt-4.1-mini': 'OPENAI',
-    'gpt-4.1-nano': 'OPENAI',
-    'gpt-4o': 'OPENAI',
-    'gpt-4-turbo': 'OPENAI',
-    'gpt-4': 'OPENAI',
-    'gpt-3.5-turbo': 'OPENAI',
-    'text-davinci-003': 'OPENAI',
-    'text-davinci-002': 'OPENAI',
-    'code-davinci-002': 'OPENAI',
-    'davinci': 'OPENAI',
-    'curie': 'OPENAI',
-    'babbage': 'OPENAI',
-    'ada': 'OPENAI',
-
-    # Anthropic
-    'claude-4-opus': 'ANTHROPIC',
-    'claude-4-sonnet': 'ANTHROPIC',
-    'claude-4-haiku': 'ANTHROPIC',
-    'claude-3-opus': 'ANTHROPIC',
-    'claude-3-sonnet': 'ANTHROPIC',
-    'claude-3-haiku': 'ANTHROPIC',
-
-    # Google (GenAI / Gemini)
-    'gemini-1.5-pro': 'GENAI',
-    'gemini-1.5-flash': 'GENAI',
-    'gemini-1.0-pro': 'GENAI',
-    'gemini-1.0-ultra': 'GENAI',
-    'gemini-1.0-lite': 'GENAI',
-
-    # Cohere
-    'command-r': 'COHERE',
-    'command-r+': 'COHERE',
-    'command-r7b': 'COHERE',
-    'command-a': 'COHERE',
-    'command': 'COHERE',
-    'rerank': 'COHERE',
-    'embed': 'COHERE',
-
-}
-
 #HYPERPARAMETERS
 DEFAULT_SUCCESS_THRESHOLD = 0.95
 DEFAULT_MAX_ITERATIONS = 3
@@ -93,13 +49,44 @@ class LLMProvider(Enum):
     """Supported LLM providers"""
     OPENAI = "gpt4"
     ANTHROPIC = "anthropic"
-    GENAI = "genai" 
+    GENAI = "genai"
     COHERE = "cohere"
 
     @classmethod
     def get_providers(cls) -> List[str]:
         """Get list of available providers"""
         return [provider.value for provider in cls]
+
+provider_to_model_list = {
+    LLMProvider.OPENAI: [
+        "gpt-4-turbo",                          # GPT-4 Turbo (usually GPT-4.0 backend), 128k context
+        "gpt-4o",                               # GPT-4 Omni, multimodal, fastest GPT-4 model
+        "gpt-4",                                # Legacy GPT-4, 8k/32k context (deprecated)
+        "gpt-3.5-turbo",                        # Fast and cheap, 16k context by default
+    ],
+    LLMProvider.ANTHROPIC: [
+        "claude-opus-4-20250514",               # Latest Claude 4 model, multimodal
+        "claude-sonnet-4-20250514",             # Claude 4 Sonnet, multimodal
+        "claude-3-7-sonnet-20250219",           # Claude 3.7 Sonnet, multimodal
+        "claude-3-5-haiku-20241022",            # Claude 3.5 Haiku, multimodal
+        "claude-3-5-sonnet-20241022",           # Claude 3.5 Sonnet, multimodal
+        "claude-3-haiku-20240307",              # Claude 3 Haiku, multimodal
+    ],
+    LLMProvider.GENAI: [
+        "gemini-2.5-pro",                       # Latest Gemini Pro, multimodal
+        "gemini-2.5-flash",                     # Gemini Flash, multimodal
+        "gemini-2.5-flash-lite-preview-06-17",  # Gemini Flash Lite, multimodal
+        "gemini-2.0-flash",                     # Gemini Flash, multimodal
+        "gemini-2.0-flash-lite",                # Gemini Flash Lite, multimodal
+        "gemini-1.5-flash",                     # Gemini Flash, multimodal
+        "gemini-1.5-pro",                       # Gemini Pro, multimodal
+    ],
+    LLMProvider.COHERE: [
+        "command-a-03-2025",                    # Command-A 03, text
+        "command-r7b-12-2024",                  # Command-r7b, faster and cheaper
+        "command-r-plus",                       # Command-R+, more expensive but better quality
+    ],
+}
 
 @dataclass(slots=True)
 class LLMConfig:
@@ -114,6 +101,19 @@ class LLMConfig:
     
     # Provider-specific settings
     extra_params: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        """Post-initialization to set API key from environment if not provided"""
+        if not self.api_key:
+            env_key = os.getenv(f"{self.provider.value.upper()}_API_KEY")
+            if env_key:
+                self.api_key = env_key
+            else:
+                raise ValueError(f"API key for {self.provider.value} provider is required but not provided.")
+
+        # Set default model name based on provider
+        if not self.model_name:
+            self.model_name = provider_to_model_list.get(self.provider, [""])[0]  # Default to first model in list
 
 @dataclass(slots=True)
 class PDDLDomain:
