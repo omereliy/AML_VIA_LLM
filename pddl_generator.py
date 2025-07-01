@@ -12,15 +12,12 @@ Optional (for specific providers):
 - Anthropic: pip install anthropic  
 - Google: pip install google-generativeai
 - Cohere: pip install cohere
-- Hugging Face: pip install requests (built-in)
-- Ollama: pip install requests (built-in) + local Ollama server
 
 Environment Variables (optional, can also pass via config):
 - OPENAI_API_KEY: Your OpenAI API key
 - ANTHROPIC_API_KEY: Your Anthropic API key
 - GOOGLE_API_KEY: Your Google AI API key
 - COHERE_API_KEY: Your Cohere API key
-- HUGGINGFACE_API_KEY: Your Hugging Face API key
 """
 
 import json
@@ -32,6 +29,7 @@ from abc import ABC, abstractmethod
 import re
 from enum import Enum
 import argparse
+from dotenv import load_dotenv
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -85,25 +83,6 @@ model_name_to_provider_name = {
     'rerank': 'COHERE',
     'embed': 'COHERE',
 
-    # HuggingFace (sample models)
-    'bert-base-uncased': 'HUGGINGFACE',
-    'gpt2': 'HUGGINGFACE',
-    'roberta-base': 'HUGGINGFACE',
-    'facebook/bart-large': 'HUGGINGFACE',
-    'google/flan-t5-xl': 'HUGGINGFACE',
-    'EleutherAI/gpt-j-6B': 'HUGGINGFACE',
-    'mistralai/Mistral-7B-Instruct-v0.1': 'HUGGINGFACE',
-    'meta-llama/Llama-2-7b-hf': 'HUGGINGFACE',
-
-    # Ollama (sample models)
-    'mistral:7b': 'OLLAMA',
-    'qwen2.5:7b': 'OLLAMA',
-    'qwen2.5:14b': 'OLLAMA',
-    'qwen2.5:32b': 'OLLAMA',
-    'qwen2.5:72b': 'OLLAMA',
-    'granite3.3:2b': 'OLLAMA',
-    'granite3.3:8b': 'OLLAMA',
-    'granite3.2-vision:2b': 'OLLAMA',
 }
 
 #HYPERPARAMETERS
@@ -116,8 +95,6 @@ class LLMProvider(Enum):
     ANTHROPIC = "anthropic"
     GENAI = "genai" 
     COHERE = "cohere"
-    HUGGINGFACE = "huggingface"
-    OLLAMA = "ollama"
 
     @classmethod
     def get_providers(cls) -> List[str]:
@@ -129,7 +106,7 @@ class LLMConfig:
     """Configuration for LLM providers"""
     provider: LLMProvider
     model_name: str
-    api_key: Optional[str] = None
+    api_key: Optional[str] = field(init=False, default=None)
     base_url: Optional[str] = None
     temperature: float = 0.7
     max_tokens: int = 2000
@@ -218,7 +195,7 @@ class OpenAIProvider(LLMInterface):
         if not self.config.api_key:
             raise ValueError("OpenAI API key required") #TODO: might want to add a quick manual on how to get and set the API key
         if not self.config.model_name:
-            self.config.model_name = "gpt-4"
+            self.config.model_name = "gpt-4-turbo"
 
 class AnthropicProvider(LLMInterface):
     """Anthropic (Claude) provider"""
@@ -330,99 +307,6 @@ class CohereProvider(LLMInterface):
         if not self.config.model_name:
             self.config.model_name = "command"
 
-class HuggingFaceProvider(LLMInterface):
-    """Hugging Face provider"""
-    
-    def __init__(self, config: LLMConfig):
-        super().__init__(config)
-        try:
-            import requests
-            self.session = requests.Session()
-            if config.api_key:
-                self.session.headers.update({"Authorization": f"Bearer {config.api_key}"})
-        except ImportError:
-            raise ImportError("requests package required. Install with: pip install requests")
-    
-    def generate(self, user_prompt: str, system_prompt: Optional[str] = None) -> str:
-        try:
-            full_prompt = user_prompt
-            if system_prompt:
-                full_prompt = f"{system_prompt}\n\n{user_prompt}"
-            
-            api_url = self.config.base_url or f"https://api-inference.huggingface.co/models/{self.config.model_name}"
-            
-            payload = {
-                "inputs": full_prompt,
-                "parameters": {
-                    "temperature": self.config.temperature,
-                    "max_new_tokens": self.config.max_tokens,
-                    "return_full_text": False
-                }
-            }
-            
-            response = self.session.post(api_url, json=payload, timeout=self.config.timeout)
-            response.raise_for_status()
-            
-            result = response.json()
-            if isinstance(result, list) and len(result) > 0:
-                return result[0].get("generated_text", "")
-            elif isinstance(result, dict):
-                return result.get("generated_text", "")
-            else:
-                return str(result)
-                
-        except Exception as e:
-            logger.error(f"Hugging Face generation failed: {e}")
-            raise
-    
-    def _validate_config(self):
-        if not self.config.api_key:
-            self.config.api_key = os.getenv("HUGGINGFACE_API_KEY")
-        if not self.config.model_name:
-            self.config.model_name = "microsoft/DialoGPT-large"
-
-class OllamaProvider(LLMInterface):
-    """Ollama local provider"""
-    
-    def __init__(self, config: LLMConfig):
-        super().__init__(config)
-        try:
-            import requests
-            self.session = requests.Session()
-        except ImportError:
-            raise ImportError("requests package required. Install with: pip install requests")
-    
-    def generate(self, user_prompt: str, system_prompt: Optional[str] = None) -> str:
-        try:
-            api_url = self.config.base_url or "http://localhost:11434/api/generate"
-            
-            payload = {
-                "model": self.config.model_name,
-                "prompt": user_prompt,
-                "system": system_prompt,
-                "stream": False,
-                "options": {
-                    "temperature": self.config.temperature,
-                    "num_predict": self.config.max_tokens,
-                }
-            }
-            
-            response = self.session.post(api_url, json=payload, timeout=self.config.timeout)
-            response.raise_for_status()
-            
-            result = response.json()
-            return result.get("response", "")
-                
-        except Exception as e:
-            logger.error(f"Ollama generation failed: {e}")
-            raise
-    
-    def _validate_config(self):
-        if not self.config.model_name:
-            self.config.model_name = "llama2"
-        if not self.config.base_url:
-            self.config.base_url = "http://localhost:11434/api/generate"
-
 class LLMFactory:
     """Factory for creating LLM providers"""
     
@@ -431,8 +315,6 @@ class LLMFactory:
         LLMProvider.ANTHROPIC: AnthropicProvider,
         LLMProvider.GENAI: GenAIProvider,
         LLMProvider.COHERE: CohereProvider,
-        LLMProvider.HUGGINGFACE: HuggingFaceProvider,
-        LLMProvider.OLLAMA: OllamaProvider,
     }
     
     @classmethod
@@ -1033,6 +915,7 @@ def create_system_from_config_file(config_path: str) -> PDDLGeneratorSystem:
 if __name__ == "__main__":
     llm_system = None
     args = parser.parse_args()
+    load_dotenv()  # Load environment variables from .env file if it exists
 
     # if for some reason user tries to use both mixed and config, raise an error
     if args.mixed and args.config:
@@ -1043,7 +926,7 @@ if __name__ == "__main__":
         gpt4_config = LLMConfig(
             provider=LLMProvider.OPENAI,
             model_name="gpt-4",
-            api_key="your-openai-api-key",  # or set OPENAI_API_KEY env var
+            api_key=os.getenv("OPENAI_API_KEY"),  # or set OPENAI_API_KEY env var
             temperature=0.7,
             max_tokens=2000
         )
@@ -1069,6 +952,7 @@ if __name__ == "__main__":
             'investigator': LLMConfig(
                 provider=LLMProvider.GENAI,
                 model_name="gemini-pro",
+                api_key=os.getenv("GOOGLE_API_KEY"),
                 temperature=0.7  # Higher temperature for creative problem finding
             ),
             'default': LLMConfig(
@@ -1119,4 +1003,3 @@ if __name__ == "__main__":
         print("Make sure you have:")
         print("1. Required packages installed (pip install openai anthropic google-generativeai cohere requests)")
         print("2. API keys set in environment variables or config")
-        print("3. For Ollama: local server running on http://localhost:11434")
