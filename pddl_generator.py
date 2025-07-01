@@ -34,8 +34,14 @@ from enum import Enum
 import argparse
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+formatter = logging.Formatter('[%(asctime)s] - %(name)s - %(levelname)s - %(message)s', datefmt='%d/%m/%Y|%H:%M:%S')
+
+logger.addHandler(console_handler)
+console_handler.setFormatter(formatter)
 
 # Dictionary mapping of model names to provider names
 model_name_to_provider_name = {
@@ -466,11 +472,6 @@ class LLMAgent(ABC):
     def __init__(self, name: str, llm_provider: LLMInterface):
         self.name = name
         self.llm = llm_provider
-    
-    @abstractmethod
-    def process(self, *args, **kwargs):
-        """Process input and return output"""
-        pass
 
 class FormalizerAgent(LLMAgent):
     """Agent responsible for formalizing natural language to PDDL"""
@@ -960,7 +961,7 @@ parser = argparse.ArgumentParser(
     epilog="""
 Default configurations:
   uniform : All agents use gpt-4.
-  mixed   : Formalizer uses gpt-4 (low temperature), Critic uses Claude (0.4 temp), 
+  mixed   : Formalizer uses gpt-4 (low temperature), Critic uses Claude (medium temperature), 
             Investigators use Gemini (high temperature).
   To use uniform, do not specify '--mixed' or '--config'.
   To use mixed, specify '--mixed' without '--config'.
@@ -997,7 +998,6 @@ API keys will default to environment variables if not provided.
 parser.add_argument(
     '--config',
     type=str,
-    required=True,
     help=f"Provide a path to a custom JSON config file."
 )
 parser.add_argument(
@@ -1092,7 +1092,7 @@ if __name__ == "__main__":
 
     # Example natural language description
     description = """
-    This is a blocks world domain where we have blocks and a table. 
+    This is a domain where we have blocks and a table. 
     Blocks can be stacked on top of each other or placed on the table. 
     The goal is to move blocks from one configuration to another.
     We need actions to pick up blocks, put them down, and stack them.
