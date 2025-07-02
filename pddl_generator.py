@@ -24,7 +24,8 @@ import json
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple, Any
+from datetime import datetime
+from typing import List, Dict, Optional, Any
 from abc import ABC, abstractmethod
 import re
 from enum import Enum
@@ -59,10 +60,10 @@ class LLMProvider(Enum):
 
 provider_to_model_list = {
     LLMProvider.OPENAI: [
+        "gpt-3.5-turbo",                        # Fast and cheap, 16k context by default
         "gpt-4-turbo",                          # GPT-4 Turbo (usually GPT-4.0 backend), 128k context
         "gpt-4o",                               # GPT-4 Omni, multimodal, fastest GPT-4 model
-        "gpt-4",                                # Legacy GPT-4, 8k/32k context (deprecated)
-        "gpt-3.5-turbo",                        # Fast and cheap, 16k context by default
+        "gpt-4",                                # Legacy GPT-4, 8k/32k context
     ],
     LLMProvider.ANTHROPIC: [
         "claude-opus-4-20250514",               # Latest Claude 4 model, multimodal
@@ -103,7 +104,7 @@ class LLMConfig:
     extra_params: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
-        """Post-initialization to set API key from environment if not provided"""
+        """Post-initialization to set API key from environment, and model name from defaults -  if not provided"""
         if not self.api_key:
             env_key = os.getenv(f"{self.provider.value.upper()}_API_KEY")
             if env_key:
@@ -185,8 +186,8 @@ class OpenAIProvider(LLMInterface):
                 timeout=self.config.timeout
             )
             return response.choices[0].message.content
-        except Exception as e:
-            logger.error(f"GPT-4 generation failed: {e}")
+        except Exception as err:
+            logger.error(f"GPT-4 generation failed: {err}")
             raise
     
     def _validate_config(self):
@@ -221,8 +222,8 @@ class AnthropicProvider(LLMInterface):
                 messages=[{"role": "user", "content": message_content}]
             )
             return response.content[0].text
-        except Exception as e:
-            logger.error(f"Anthropic generation failed: {e}")
+        except Exception as err:
+            logger.error(f"Anthropic generation failed: {err}")
             raise
     
     def _validate_config(self):
@@ -259,8 +260,8 @@ class GenAIProvider(LLMInterface):
                 }
             )
             return response.text
-        except Exception as e:
-            logger.error(f"GenAI generation failed: {e}")
+        except Exception as err:
+            logger.error(f"GenAI generation failed: {err}")
             raise
     
     def _validate_config(self):
@@ -295,8 +296,8 @@ class CohereProvider(LLMInterface):
                 max_tokens=self.config.max_tokens,
             )
             return response.generations[0].text
-        except Exception as e:
-            logger.error(f"Cohere generation failed: {e}")
+        except Exception as err:
+            logger.error(f"Cohere generation failed: {err}")
             raise
     
     def _validate_config(self):
@@ -338,7 +339,6 @@ class LLMFactory:
         config = LLMConfig(
             provider=provider,
             model_name=config_dict.get("model_name", ""),
-            api_key=config_dict.get("api_key"),
             base_url=config_dict.get("base_url"),
             temperature=config_dict.get("temperature", 0.7),
             max_tokens=config_dict.get("max_tokens", 2000),
@@ -354,6 +354,47 @@ class LLMAgent(ABC):
     def __init__(self, name: str, llm_provider: LLMInterface):
         self.name = name
         self.llm = llm_provider
+
+
+def _extract_section(pddl_text: str, section_name: str) -> List[str]:
+    """Extract items from a PDDL section"""
+    pattern = rf'\(:{section_name}([^)]*)\)'
+    match = re.search(pattern, pddl_text, re.DOTALL)
+    if match:
+        content = match.group(1).strip()
+        return [item.strip() for item in content.split() if item.strip()]
+    return []
+
+
+def _extract_actions(pddl_text: str) -> List[str]:
+    """Extract action definitions"""
+    action_pattern = r'\(:action[^)]*(?:\([^)]*\)[^)]*)*\)'
+    matches = re.findall(action_pattern, pddl_text, re.DOTALL)
+    return matches
+
+
+def _parse_pddl_domain(pddl_text: str) -> PDDLDomain:
+    """Parse PDDL text into structured domain object"""
+    # Simple regex-based parsing (could be enhanced with proper PDDL parser)
+    domain_name_match = re.search(r'\(define \(domain ([^)]+)\)', pddl_text)
+    domain_name = domain_name_match.group(1) if domain_name_match else "unknown"
+
+    types = _extract_section(pddl_text, "types")
+    constants = _extract_section(pddl_text, "constants")
+    predicates = _extract_section(pddl_text, "predicates")
+    functions = _extract_section(pddl_text, "functions")
+    actions = _extract_actions(pddl_text)
+
+    return PDDLDomain(
+        domain_name=domain_name,
+        types=types,
+        constants=constants,
+        predicates=predicates,
+        functions=functions,
+        actions=actions,
+        raw_text=pddl_text
+    )
+
 
 class FormalizerAgent(LLMAgent):
     """Agent responsible for formalizing natural language to PDDL"""
@@ -383,7 +424,7 @@ Generate a complete PDDL domain definition:"""
         
         pddl_text = self.llm.generate(prompt, self.system_prompt)
         logger.debug(f"========================\n[{self.name}] Generated PDDL text after initial formalization:\n {pddl_text}\n========================")
-        return self._parse_pddl_domain(pddl_text, natural_language_description)
+        return _parse_pddl_domain(pddl_text)
     
     def re_formalization(self, original_description: str, feedback_prompt: str) -> PDDLDomain:
         """Re-formalize based on investigator feedback"""
@@ -398,45 +439,8 @@ Please generate an improved PDDL domain that addresses all the identified issues
         
         pddl_text = self.llm.generate(prompt, self.system_prompt)
         logger.debug(f"========================\n[{self.name}] Generated PDDL text after re-formalization:\n {pddl_text}\n========================")
-        return self._parse_pddl_domain(pddl_text, original_description)
-    
-    def _parse_pddl_domain(self, pddl_text: str, original_description: str) -> PDDLDomain:
-        """Parse PDDL text into structured domain object"""
-        # Simple regex-based parsing (could be enhanced with proper PDDL parser)
-        domain_name_match = re.search(r'\(define \(domain ([^)]+)\)', pddl_text)
-        domain_name = domain_name_match.group(1) if domain_name_match else "unknown"
-        
-        types = self._extract_section(pddl_text, "types")
-        constants = self._extract_section(pddl_text, "constants")
-        predicates = self._extract_section(pddl_text, "predicates")
-        functions = self._extract_section(pddl_text, "functions")
-        actions = self._extract_actions(pddl_text)
-        
-        return PDDLDomain(
-            domain_name=domain_name,
-            types=types,
-            constants=constants,
-            predicates=predicates,
-            functions=functions,
-            actions=actions,
-            raw_text=pddl_text
-        )
-    
-    def _extract_section(self, pddl_text: str, section_name: str) -> List[str]:
-        """Extract items from a PDDL section"""
-        pattern = rf'\(:{section_name}([^)]*)\)'
-        match = re.search(pattern, pddl_text, re.DOTALL)
-        if match:
-            content = match.group(1).strip()
-            return [item.strip() for item in content.split() if item.strip()]
-        return []
-    
-    def _extract_actions(self, pddl_text: str) -> List[str]:
-        """Extract action definitions"""
-        actions = []
-        action_pattern = r'\(:action[^)]*(?:\([^)]*\)[^)]*)*\)'
-        matches = re.findall(action_pattern, pddl_text, re.DOTALL)
-        return matches
+        return _parse_pddl_domain(pddl_text)
+
 
 class SuccessRateCritic(LLMAgent):
     """Agent that evaluates how well the PDDL domain matches the description"""
@@ -505,8 +509,8 @@ CONCERNS: [List specific issues or areas for improvement, one per line]"""
                 passes_threshold=success_rate >= self.threshold,
                 specific_concerns=concerns
             )
-        except Exception as e:
-            logger.error(f"Failed to parse evaluation response: {e}")
+        except Exception as err:
+            logger.error(f"Failed to parse evaluation response: {err}")
             # Return default evaluation
             return SuccessRateEvaluation(
                 success_rate=0.5,
@@ -728,6 +732,24 @@ class Combinator:
 
         return "\n".join(feedback_parts)
 
+
+def _get_default_configs() -> Dict[str, LLMConfig]:
+    """Get default LLM configurations"""
+    default_config = LLMConfig(
+        provider=LLMProvider.OPENAI,
+        model_name="gpt-4",
+        temperature=0.7,
+        max_tokens=2000
+    )
+
+    return {
+        'default': default_config,
+        'formalizer': default_config,
+        'critic': default_config,
+        'investigator': default_config
+    }
+
+
 class PDDLGeneratorSystem:
     """Main orchestrator for the multi-agent PDDL generation system"""
     
@@ -740,7 +762,7 @@ class PDDLGeneratorSystem:
         
         # Set up default LLM configurations if none provided
         if llm_configs is None:
-            llm_configs = self._get_default_configs()
+            llm_configs = _get_default_configs()
         
         # Create LLM providers
         self.llm_providers = {}
@@ -761,23 +783,7 @@ class PDDLGeneratorSystem:
             TypingInvestigator(self.llm_providers.get('investigator', self.llm_providers['default']))
         ]
         self.combinator = Combinator()
-    
-    def _get_default_configs(self) -> Dict[str, LLMConfig]:
-        """Get default LLM configurations"""
-        default_config = LLMConfig(
-            provider=LLMProvider.OPENAI,
-            model_name="gpt-4",
-            temperature=0.7,
-            max_tokens=2000
-        )
-        
-        return {
-            'default': default_config,
-            'formalizer': default_config,
-            'critic': default_config,
-            'investigator': default_config
-        }
-    
+
     @classmethod
     def create_with_single_provider(cls, provider_config: LLMConfig, **kwargs) -> 'PDDLGeneratorSystem':
         """Create system using single LLM provider for all agents"""
@@ -893,18 +899,23 @@ parser.add_argument(
     action='store_true',
     help="Use mixed provider configuration ."
 )
+parser.add_argument(
+    '--description',
+    type=str,
+    help=f"Path to the description of the problem in natural language"
+)
 
 
-def create_system_from_config_file(config_path: str) -> PDDLGeneratorSystem:
+def create_system_from_config_file(config_file: str) -> PDDLGeneratorSystem:
     """Create PDDL generator system from JSON configuration file"""
-    with open(config_path, 'r') as f:
+    with open(config_file, 'r') as f:
         config_data = json.load(f)
 
     llm_configs = {}
     for role, config_dict in config_data.get('llm_configs', {}).items():
         llm_configs[role] = LLMFactory.create_from_dict(config_dict)
 
-    return PDDLGeneratorSystem.create_with_mixed_providers(default_config=llm_configs.get('default', None),
+    return PDDLGeneratorSystem.create_with_mixed_providers(default_config=llm_configs.get('default', LLMConfig(provider=LLMProvider.OPENAI, model_name="gpt-4", temperature=0.7, max_tokens=2000)),
                                                             formalizer_config=llm_configs.get('formalizer', None),
                                                             critic_config=llm_configs.get('critic', None),
                                                             investigator_config=llm_configs.get('investigator', None),
@@ -926,7 +937,6 @@ if __name__ == "__main__":
         gpt4_config = LLMConfig(
             provider=LLMProvider.OPENAI,
             model_name="gpt-4",
-            api_key=os.getenv("OPENAI_API_KEY"),  # or set OPENAI_API_KEY env var
             temperature=0.7,
             max_tokens=2000
         )
@@ -952,13 +962,11 @@ if __name__ == "__main__":
             'investigator': LLMConfig(
                 provider=LLMProvider.GENAI,
                 model_name="gemini-pro",
-                api_key=os.getenv("GOOGLE_API_KEY"),
                 temperature=0.7  # Higher temperature for creative problem finding
             ),
             'default': LLMConfig(
                 provider=LLMProvider.OPENAI,
                 model_name="gpt-4",
-                api_key="your-openai-api-key",  # or set OPENAI_API_KEY env var
                 temperature=0.7,
                 max_tokens=2000
             )
@@ -980,23 +988,32 @@ if __name__ == "__main__":
 
         llm_system = create_system_from_config_file(config_path)
 
-    # Example natural language description
-    description = """
+    # Example natural language description, this is used by default, switch to your own description if you want
+    problem_desc = """
     This is a domain where we have blocks and a table. 
     Blocks can be stacked on top of each other or placed on the table. 
     The goal is to move blocks from one configuration to another.
     We need actions to pick up blocks, put them down, and stack them.
     A robot arm can only hold one block at a time.
     """
+    if args.description:
+        # read the description from the file given in the command line argument
+        with open(args.description, 'r') as f:
+            problem_desc = f.read().strip()
     
     # Choose which system to use (comment out others for testing)
     print("\n=== Generating PDDL with selected system ===")
     
     try:
         # Use one of the systems - change this line to test different providers
-        result = llm_system.generate_pddl(description)
+        result = llm_system.generate_pddl(problem_desc)
         print("Generated PDDL:")
         print(result)
+        # Save the result to a file named properly and with a timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"generated_pddl_{timestamp}.pddl"
+        with open(filename, 'w') as f:
+            f.write(result)
         
     except Exception as e:
         print(f"Error generating PDDL: {e}")

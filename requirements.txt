@@ -11,6 +11,12 @@ langchain-cohere==0.1.5
 langchain-huggingface==0.0.3
 langchain-ollama==0.1.0
 
+# LLM Provider libraries
+openai==0.27.8
+anthropic==0.16.0
+google==3.0.0
+cohere==5.11.0
+
 # Environment and configuration
 python-dotenv==1.0.1
 
