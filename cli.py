@@ -5,16 +5,15 @@ Command-line interface and configuration handling
 import argparse
 import json
 import os
-from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 import config
+from config import LLMProvider, DEFAULT_SUCCESS_THRESHOLD, DEFAULT_MAX_ITERATIONS
 from llm_providers import LLMConfig, LLMFactory
 from system import PDDLGeneratorSystem
-from config import LLMProvider, DEFAULT_SUCCESS_THRESHOLD, DEFAULT_MAX_ITERATIONS
 
 
 def create_argument_parser() -> argparse.ArgumentParser:
