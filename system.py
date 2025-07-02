@@ -3,12 +3,14 @@ Main system orchestrator for the multi-agent PDDL generation system
 """
 
 import logging
-from typing import Dict, Optional
+from typing import Dict
 
-from llm_providers import LLMInterface, LLMConfig, LLMFactory, get_default_configs
-from agents import FormalizerAgent, SuccessRateCritic, ActionSignatureInvestigator, EffectsAndPreconditionsInvestigator, TypingInvestigator, Combinator
-from pddl_models import PDDLDomain
+from agents import FormalizerAgent, SuccessRateCritic, ActionSignatureInvestigator, EffectsAndPreconditionsInvestigator, \
+    TypingInvestigator, Combinator
 from config import DEFAULT_MAX_ITERATIONS
+from llm_providers import LLMConfig, LLMFactory, get_default_configs
+from pddl_models import PDDLDomain
+from experiment_logging import get_experiment_logger
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +80,18 @@ class PDDLGeneratorSystem:
         """Main method to generate PDDL from natural language description"""
         logger.info("Starting PDDL generation process")
         
+        # Get experiment logger for conversation logging
+        exp_logger = get_experiment_logger()
+
+        try:
+            system_logger = exp_logger.get_agent_logger("System")
+        except KeyError:
+            system_logger = logging.Logger('System')
+
+        if exp_logger:
+            system_logger = exp_logger.get_agent_logger("System")
+            system_logger.info("Starting PDDL generation process with multi-agent refinement")
+        
         current_domain: PDDLDomain | None = None
         iteration = 0
         
@@ -85,17 +99,42 @@ class PDDLGeneratorSystem:
             iteration += 1
             logger.info(f"Iteration {iteration}/{self.max_iterations}")
             
+            # Log iteration start right before doing the work
+            if exp_logger:
+                exp_logger.log_iteration_start(iteration)
+                system_logger.info(f"Beginning iteration {iteration} of {self.max_iterations}")
+
             # Formalization step
             if iteration == 1:
+                if exp_logger:
+                    system_logger.info("Requesting initial PDDL formalization from Formalizer")
                 current_domain = self.formalizer.initial_formalization(natural_language_description)
             else:
                 # Get feedback from previous iteration
+                if exp_logger:
+                    system_logger.info("Requesting investigation reports from specialist agents")
+                
                 reports = [inv.investigate(natural_language_description, current_domain) 
                           for inv in self.investigators]
                 feedback_prompt = self.combinator.combine_reports(reports, natural_language_description)
+                
+                if exp_logger:
+                    combinator_logger = exp_logger.get_agent_logger("Combinator")
+                    combinator_logger.info("Combined investigation reports into feedback:")
+                    combinator_logger.info(feedback_prompt)
+                    system_logger.info("Requesting refined PDDL from Formalizer based on feedback")
+                
                 current_domain = self.formalizer.re_formalization(natural_language_description, feedback_prompt)
             
+            # Save iteration PDDL
+            if exp_logger and current_domain:
+                exp_logger.save_iteration_pddl(iteration, current_domain.raw_text)
+                system_logger.info(f"Saved iteration {iteration} PDDL to iteration_{iteration}.pddl")
+            
             # Evaluation step
+            if exp_logger:
+                system_logger.info("Requesting evaluation from Critic")
+            
             evaluation = self.critic.evaluate(natural_language_description, current_domain)
             
             logger.info(f"Success rate: {evaluation.success_rate:.2f}")
@@ -103,10 +142,22 @@ class PDDLGeneratorSystem:
             
             if evaluation.passes_threshold:
                 logger.info("Domain passed evaluation - returning final PDDL")
+                if exp_logger:
+                    system_logger.info(f"SUCCESS! Domain achieved {evaluation.success_rate:.2f} success rate (threshold: {self.success_threshold})")
+                    system_logger.info("Experiment completed successfully")
                 return current_domain.raw_text
             else:
                 logger.info(f"Domain failed evaluation: {evaluation.reasoning}")
+                if exp_logger:
+                    system_logger.info(f"Domain did not meet threshold ({evaluation.success_rate:.2f} < {self.success_threshold})")
+                    if iteration < self.max_iterations:
+                        system_logger.info("Proceeding to next iteration for refinement")
         
         logger.info(f"Maximum iterations ({self.max_iterations}) reached, LLM as a judge did not pass the threshold.")
         logger.info("Returning last generated PDDL domain.")
+        
+        if exp_logger:
+            system_logger.info(f"Maximum iterations ({self.max_iterations}) reached without achieving success threshold")
+            system_logger.info("Returning best attempt from final iteration")
+        
         return current_domain.raw_text if current_domain else ""

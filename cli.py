@@ -1,26 +1,23 @@
 """
-Command-line interface and configuration handling
+Command-line interface for PDDL generation experiments
 """
 
 import argparse
 import json
 import os
-from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any
-
+from pathlib import Path
 from dotenv import load_dotenv
-
-import config
+from config import LLMProvider, DEFAULT_SUCCESS_THRESHOLD, DEFAULT_MAX_ITERATIONS
 from llm_providers import LLMConfig, LLMFactory
 from system import PDDLGeneratorSystem
-from config import LLMProvider, DEFAULT_SUCCESS_THRESHOLD, DEFAULT_MAX_ITERATIONS
+from experiment_logging import setup_experiment_logging
 
 
 def create_argument_parser() -> argparse.ArgumentParser:
     """Create and configure argument parser"""
     parser = argparse.ArgumentParser(
-        description="Choose an LLM configuration for your multi-agent system.",
+        description="Run PDDL generation experiments with iterative refinement.",
         epilog="""
 Default configurations:
   uniform : All agents use gpt-4.
@@ -71,41 +68,49 @@ API keys will default to environment variables if not provided.
     parser.add_argument(
         '--description',
         type=str,
-        help="Path to the description of the problem in natural language"
+        help="Natural language description as text (overrides file input)"
     )
     parser.add_argument(
-        '-O','--output',
+        '--description-file',
         type=str,
-        default=None,
-        help="Output directory to save the generated PDDL file. Defaults to current directory."
+        default='user_domain_description.txt',
+        help="Path to file containing domain description (default: user_domain_description.txt)"
+    )
+    parser.add_argument(
+        '--experiment-name',
+        type=str,
+        help="Name for this experiment run (used in output files)"
+    )
+    parser.add_argument(
+        '--output-dir',
+        type=str,
+        default='experiments',
+        help="Directory to save experiment results (default: experiments)"
     )
     parser.add_argument(
         '--max-iterations',
         type=int,
         default=DEFAULT_MAX_ITERATIONS,
-        help="Maximum number of iterations for the PDDL generation process. Default is 3. Minimum is 0."
+        help=f"Maximum refinement iterations (default: {DEFAULT_MAX_ITERATIONS})"
     )
     parser.add_argument(
         '--success-threshold',
         type=float,
         default=DEFAULT_SUCCESS_THRESHOLD,
-        help="Success threshold for the PDDL generation process. Default is 0.95. Minimum is 0. Maximum is 1."
+        help=f"Success threshold for critic evaluation (default: {DEFAULT_SUCCESS_THRESHOLD})"
     )
     
     return parser
 
 
-def create_system_from_config_file(config_file: str, success_threshold: int, max_iterations: int) -> PDDLGeneratorSystem:
-    """Create PDDL generator system from flat JSON configuration file (no llm_configs nesting)"""
+def create_system_from_config_file(config_file: str) -> PDDLGeneratorSystem:
+    """Create PDDL generator system from JSON configuration file"""
     with open(config_file, 'r') as f:
         config_data = json.load(f)
 
-    llm_roles = ['default', 'formalizer', 'critic', 'investigator']
     llm_configs = {}
-
-    for role in llm_roles:
-        if role in config_data:
-            llm_configs[role] = LLMFactory.create_from_dict(config_data[role])
+    for role, config_dict in config_data.get('llm_configs', {}).items():
+        llm_configs[role] = LLMFactory.create_from_dict(config_dict)
 
     return PDDLGeneratorSystem.create_with_mixed_providers(
         default_config=llm_configs.get('default', LLMConfig(
@@ -117,8 +122,8 @@ def create_system_from_config_file(config_file: str, success_threshold: int, max
         formalizer_config=llm_configs.get('formalizer', None),
         critic_config=llm_configs.get('critic', None),
         investigator_config=llm_configs.get('investigator', None),
-        success_threshold=success_threshold,
-        max_iterations=max_iterations
+        success_threshold=config_data.get('success_threshold', DEFAULT_SUCCESS_THRESHOLD),
+        max_iterations=config_data.get('max_iterations', DEFAULT_MAX_ITERATIONS)
     )
 
 
@@ -175,30 +180,54 @@ def create_mixed_system() -> PDDLGeneratorSystem:
 
 
 def get_problem_description(args) -> str:
-    """Get problem description from args or use default"""
+    """Get problem description from command line text or file"""
     if args.description:
-        with open(args.description, 'r') as f:
-            return f.read().strip()
+        # Use direct text input from command line
+        return args.description.strip()
     
-    # Default problem description
+    # Try to read from specified file
+    description_file = args.description_file
+    if os.path.exists(description_file):
+        with open(description_file, 'r') as f:
+            content = f.read().strip()
+            if content:
+                return content
+    
+    # Fallback to default if file doesn't exist or is empty
+    print(f"Warning: {description_file} not found or empty, using default description")
     return """
-    This is a domain where we have blocks and a table. 
-    Blocks can be stacked on top of each other or placed on the table. 
-    The goal is to move blocks from one configuration to another.
-    We need actions to pick up blocks, put them down, and stack them.
-    A robot arm can only hold one block at a time.
-    """
+This is a domain where we have blocks and a table. 
+Blocks can be stacked on top of each other or placed on the table. 
+The goal is to move blocks from one configuration to another.
+We need actions to pick up blocks, put them down, and stack them.
+A robot arm can only hold one block at a time.
+"""
 
 
-def save_result(result: str, output_path: str or None) -> str:
-    """Save the generated PDDL to a timestamped file"""
+def save_experiment_result(result: str, experiment_name: str = None, output_dir: str = "experiments") -> str:
+    """Save the generated PDDL to an experiment file (final result)"""
+    # The experiment folder structure is now handled by ExperimentLogger
+    # This function is kept for backward compatibility but may not be needed
+    # since final_domain.pddl is saved automatically by the logger
+    
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"generated_pddl_{timestamp}.pddl"
-    out_dir = Path(output_path) if output_path else Path(".")
-    file_path = out_dir / filename
+    
+    if experiment_name:
+        folder_name = f"{experiment_name}_{timestamp}"
+    else:
+        folder_name = f"experiment_{timestamp}"
+    
+    # Create experiment folder
+    base_dir = Path(output_dir)
+    exp_dir = base_dir / folder_name
+    exp_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Save as final_domain.pddl in the experiment folder
+    file_path = exp_dir / "final_domain.pddl"
     with open(str(file_path), 'w') as f:
         f.write(result)
-    return filename
+    
+    return str(file_path)
 
 
 def main():
@@ -210,39 +239,73 @@ def main():
     # Validate arguments
     if args.mixed and args.config:
         raise ValueError("Cannot use both --mixed and --config. Choose one configuration method.")
-    if args.success_threshold < 0 or args.success_threshold > 1:
-        raise ValueError("Success threshold must be between 0 and 1.")
-    if args.max_iterations <= 0:
-        raise ValueError("Maximum iterations must be a positive integer.")
 
     # Create system based on configuration
     if args.config:
         if not os.path.exists(args.config):
             raise FileNotFoundError(f"Configuration file not found: {args.config}")
-        llm_system = create_system_from_config_file(args.config,args.success_threshold,args.max_iterations)
+        llm_system = create_system_from_config_file(args.config)
     elif args.mixed:
         llm_system = create_mixed_system()
     else:
         llm_system = create_uniform_system()
+    
+    # Override system parameters if provided
+    if hasattr(llm_system, 'max_iterations'):
+        llm_system.max_iterations = args.max_iterations
+    if hasattr(llm_system, 'success_threshold'):
+        llm_system.success_threshold = args.success_threshold
 
     # Get problem description
     problem_desc = get_problem_description(args)
     
-    print("\n=== Generating PDDL with selected system ===")
+    # Print experiment configuration
+    print("\n=== PDDL Generation Experiment ===")
+    print(f"Experiment name: {args.experiment_name or 'unnamed'}")
+    print(f"Max iterations: {args.max_iterations}")
+    print(f"Success threshold: {args.success_threshold}")
+    print(f"Output directory: {args.output_dir}")
+    print(f"Description source: {'command line' if args.description else args.description_file}")
+    print("\nDomain description:")
+    print("-" * 40)
+    print(problem_desc)
+    print("-" * 40)
+    
+    # Set up experiment logging (archived by timestamp)
+    exp_logger = setup_experiment_logging(args.experiment_name, args.output_dir)
     
     try:
+        # Log experiment start
+        config_info = {
+            "max_iterations": args.max_iterations,
+            "success_threshold": args.success_threshold,
+            "configuration": "mixed" if args.mixed else ("custom" if args.config else "uniform"),
+            "description_source": "command line" if args.description else args.description_file
+        }
+        exp_logger.log_experiment_start(problem_desc, config_info)
+        
+        print("\nStarting iterative PDDL generation...")
         result = llm_system.generate_pddl(problem_desc)
-        print("Generated PDDL:")
+        
+        # Log experiment end
+        success = bool(result and result.strip())
+        exp_logger.log_experiment_end(result, success)
+        
+        print("\n=== Final Generated PDDL ===")
         print(result)
         
-        filename = save_result(result,args.output)
-        print(f"\nResult saved to: {filename}")
+        print(f"\n✅ Experiment completed! Results archived to:")
+        print(f"   Experiment folder: {exp_logger.experiment_dir}")
+        print(f"   Conversation log: {exp_logger.log_file}")
+        print(f"   Iteration PDDLs: iteration_1.pddl, iteration_2.pddl, ...")
+        print(f"   Final PDDL: final_domain.pddl")
         
     except Exception as e:
-        print(f"Error generating PDDL: {e}")
-        print("Make sure you have:")
-        print("1. Required packages installed (pip install openai anthropic google-generativeai cohere requests)")
-        print("2. API keys set in environment variables or config")
+        print(f"\n❌ Error during experiment: {e}")
+        print("\nTroubleshooting:")
+        print("1. Check API keys: python validate_api_keys.py")
+        print("2. Verify required packages are installed")
+        print("3. Check domain description file exists and is readable")
 
 
 if __name__ == "__main__":

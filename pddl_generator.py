@@ -32,13 +32,6 @@ formatter = logging.Formatter('[%(asctime)s] - %(name)s - %(levelname)s - %(mess
 logger.addHandler(console_handler)
 console_handler.setFormatter(formatter)
 
-# Import everything from the modular components
-from config import *
-from llm_providers import *
-from pddl_models import *
-from agents import *
-from system import *
-
 # Import CLI for backward compatibility
 if __name__ == "__main__":
     from cli import main

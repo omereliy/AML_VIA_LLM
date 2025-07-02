@@ -1,0 +1,8 @@
+This is a domain where we have blocks and a table. 
+Blocks can be stacked on top of each other or placed on the table. 
+The goal is to move blocks from one configuration to another.
+We need actions to pick up blocks, put them down, and stack them.
+A robot arm can only hold one block at a time.
+Only the top block in a stack can be picked up.
+The robot arm must be empty to pick up a block.
+A block can only be placed on the table or on top of another block.
