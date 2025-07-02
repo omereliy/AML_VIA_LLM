@@ -12,11 +12,6 @@ load_dotenv()
 DEFAULT_SUCCESS_THRESHOLD = 0.95
 DEFAULT_MAX_ITERATIONS = 3
 
-try:
-    OUT_DIR = os.environ.get("OUT_DIR")
-except KeyError:
-    OUT_DIR=""
-
 
 class LLMProvider(Enum):
     """Supported LLM providers"""
