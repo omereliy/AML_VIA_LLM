@@ -12,124 +12,89 @@ Optional (for specific providers):
 - Anthropic: pip install anthropic  
 - Google: pip install google-generativeai
 - Cohere: pip install cohere
-- Hugging Face: pip install requests (built-in)
-- Ollama: pip install requests (built-in) + local Ollama server
 
 Environment Variables (optional, can also pass via config):
 - OPENAI_API_KEY: Your OpenAI API key
 - ANTHROPIC_API_KEY: Your Anthropic API key
 - GOOGLE_API_KEY: Your Google AI API key
 - COHERE_API_KEY: Your Cohere API key
-- HUGGINGFACE_API_KEY: Your Hugging Face API key
 """
 
 import json
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple, Any
+from datetime import datetime
+from typing import List, Dict, Optional, Any
 from abc import ABC, abstractmethod
 import re
 from enum import Enum
 import argparse
+from dotenv import load_dotenv
 
 # Configure logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
+console_handler.setLevel(logging.DEBUG)
 formatter = logging.Formatter('[%(asctime)s] - %(name)s - %(levelname)s - %(message)s', datefmt='%d/%m/%Y|%H:%M:%S')
 
 logger.addHandler(console_handler)
 console_handler.setFormatter(formatter)
 
-# Dictionary mapping of model names to provider names
-model_name_to_provider_name = {
-    # OpenAI
-    'gpt-4.1': 'OPENAI',
-    'gpt-4.1-mini': 'OPENAI',
-    'gpt-4.1-nano': 'OPENAI',
-    'gpt-4o': 'OPENAI',
-    'gpt-4-turbo': 'OPENAI',
-    'gpt-4': 'OPENAI',
-    'gpt-3.5-turbo': 'OPENAI',
-    'text-davinci-003': 'OPENAI',
-    'text-davinci-002': 'OPENAI',
-    'code-davinci-002': 'OPENAI',
-    'davinci': 'OPENAI',
-    'curie': 'OPENAI',
-    'babbage': 'OPENAI',
-    'ada': 'OPENAI',
-
-    # Anthropic
-    'claude-4-opus': 'ANTHROPIC',
-    'claude-4-sonnet': 'ANTHROPIC',
-    'claude-4-haiku': 'ANTHROPIC',
-    'claude-3-opus': 'ANTHROPIC',
-    'claude-3-sonnet': 'ANTHROPIC',
-    'claude-3-haiku': 'ANTHROPIC',
-
-    # Google (GenAI / Gemini)
-    'gemini-1.5-pro': 'GENAI',
-    'gemini-1.5-flash': 'GENAI',
-    'gemini-1.0-pro': 'GENAI',
-    'gemini-1.0-ultra': 'GENAI',
-    'gemini-1.0-lite': 'GENAI',
-
-    # Cohere
-    'command-r': 'COHERE',
-    'command-r+': 'COHERE',
-    'command-r7b': 'COHERE',
-    'command-a': 'COHERE',
-    'command': 'COHERE',
-    'rerank': 'COHERE',
-    'embed': 'COHERE',
-
-    # HuggingFace (sample models)
-    'bert-base-uncased': 'HUGGINGFACE',
-    'gpt2': 'HUGGINGFACE',
-    'roberta-base': 'HUGGINGFACE',
-    'facebook/bart-large': 'HUGGINGFACE',
-    'google/flan-t5-xl': 'HUGGINGFACE',
-    'EleutherAI/gpt-j-6B': 'HUGGINGFACE',
-    'mistralai/Mistral-7B-Instruct-v0.1': 'HUGGINGFACE',
-    'meta-llama/Llama-2-7b-hf': 'HUGGINGFACE',
-
-    # Ollama (sample models)
-    'mistral:7b': 'OLLAMA',
-    'qwen2.5:7b': 'OLLAMA',
-    'qwen2.5:14b': 'OLLAMA',
-    'qwen2.5:32b': 'OLLAMA',
-    'qwen2.5:72b': 'OLLAMA',
-    'granite3.3:2b': 'OLLAMA',
-    'granite3.3:8b': 'OLLAMA',
-    'granite3.2-vision:2b': 'OLLAMA',
-}
-
 #HYPERPARAMETERS
-DEFAULT_SUCCESS_THRESHOLD = 0.8
+DEFAULT_SUCCESS_THRESHOLD = 0.95
 DEFAULT_MAX_ITERATIONS = 3
 
 class LLMProvider(Enum):
     """Supported LLM providers"""
     OPENAI = "gpt4"
     ANTHROPIC = "anthropic"
-    GENAI = "genai" 
+    GENAI = "genai"
     COHERE = "cohere"
-    HUGGINGFACE = "huggingface"
-    OLLAMA = "ollama"
 
     @classmethod
     def get_providers(cls) -> List[str]:
         """Get list of available providers"""
         return [provider.value for provider in cls]
 
+provider_to_model_list = {
+    LLMProvider.OPENAI: [
+        "gpt-3.5-turbo",                        # Fast and cheap, 16k context by default
+        "gpt-4-turbo",                          # GPT-4 Turbo (usually GPT-4.0 backend), 128k context
+        "gpt-4o",                               # GPT-4 Omni, multimodal, fastest GPT-4 model
+        "gpt-4",                                # Legacy GPT-4, 8k/32k context
+    ],
+    LLMProvider.ANTHROPIC: [
+        "claude-opus-4-20250514",               # Latest Claude 4 model, multimodal
+        "claude-sonnet-4-20250514",             # Claude 4 Sonnet, multimodal
+        "claude-3-7-sonnet-20250219",           # Claude 3.7 Sonnet, multimodal
+        "claude-3-5-haiku-20241022",            # Claude 3.5 Haiku, multimodal
+        "claude-3-5-sonnet-20241022",           # Claude 3.5 Sonnet, multimodal
+        "claude-3-haiku-20240307",              # Claude 3 Haiku, multimodal
+    ],
+    LLMProvider.GENAI: [
+        "gemini-2.5-pro",                       # Latest Gemini Pro, multimodal
+        "gemini-2.5-flash",                     # Gemini Flash, multimodal
+        "gemini-2.5-flash-lite-preview-06-17",  # Gemini Flash Lite, multimodal
+        "gemini-2.0-flash",                     # Gemini Flash, multimodal
+        "gemini-2.0-flash-lite",                # Gemini Flash Lite, multimodal
+        "gemini-1.5-flash",                     # Gemini Flash, multimodal
+        "gemini-1.5-pro",                       # Gemini Pro, multimodal
+    ],
+    LLMProvider.COHERE: [
+        "command-a-03-2025",                    # Command-A 03, text
+        "command-r7b-12-2024",                  # Command-r7b, faster and cheaper
+        "command-r-plus",                       # Command-R+, more expensive but better quality
+    ],
+}
+
 @dataclass(slots=True)
 class LLMConfig:
     """Configuration for LLM providers"""
     provider: LLMProvider
     model_name: str
-    api_key: Optional[str] = None
+    api_key: Optional[str] = field(init=False, default=None)
     base_url: Optional[str] = None
     temperature: float = 0.7
     max_tokens: int = 2000
@@ -137,6 +102,19 @@ class LLMConfig:
     
     # Provider-specific settings
     extra_params: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        """Post-initialization to set API key from environment, and model name from defaults -  if not provided"""
+        if not self.api_key:
+            env_key = os.getenv(f"{self.provider.value.upper()}_API_KEY")
+            if env_key:
+                self.api_key = env_key
+            else:
+                raise ValueError(f"API key for {self.provider.value} provider is required but not provided.")
+
+        # Set default model name based on provider
+        if not self.model_name:
+            self.model_name = provider_to_model_list.get(self.provider, [""])[0]  # Default to first model in list
 
 @dataclass(slots=True)
 class PDDLDomain:
@@ -208,8 +186,8 @@ class OpenAIProvider(LLMInterface):
                 timeout=self.config.timeout
             )
             return response.choices[0].message.content
-        except Exception as e:
-            logger.error(f"GPT-4 generation failed: {e}")
+        except Exception as err:
+            logger.error(f"GPT-4 generation failed: {err}")
             raise
     
     def _validate_config(self):
@@ -218,7 +196,7 @@ class OpenAIProvider(LLMInterface):
         if not self.config.api_key:
             raise ValueError("OpenAI API key required") #TODO: might want to add a quick manual on how to get and set the API key
         if not self.config.model_name:
-            self.config.model_name = "gpt-4"
+            self.config.model_name = "gpt-4-turbo"
 
 class AnthropicProvider(LLMInterface):
     """Anthropic (Claude) provider"""
@@ -244,8 +222,8 @@ class AnthropicProvider(LLMInterface):
                 messages=[{"role": "user", "content": message_content}]
             )
             return response.content[0].text
-        except Exception as e:
-            logger.error(f"Anthropic generation failed: {e}")
+        except Exception as err:
+            logger.error(f"Anthropic generation failed: {err}")
             raise
     
     def _validate_config(self):
@@ -282,8 +260,8 @@ class GenAIProvider(LLMInterface):
                 }
             )
             return response.text
-        except Exception as e:
-            logger.error(f"GenAI generation failed: {e}")
+        except Exception as err:
+            logger.error(f"GenAI generation failed: {err}")
             raise
     
     def _validate_config(self):
@@ -318,8 +296,8 @@ class CohereProvider(LLMInterface):
                 max_tokens=self.config.max_tokens,
             )
             return response.generations[0].text
-        except Exception as e:
-            logger.error(f"Cohere generation failed: {e}")
+        except Exception as err:
+            logger.error(f"Cohere generation failed: {err}")
             raise
     
     def _validate_config(self):
@@ -330,99 +308,6 @@ class CohereProvider(LLMInterface):
         if not self.config.model_name:
             self.config.model_name = "command"
 
-class HuggingFaceProvider(LLMInterface):
-    """Hugging Face provider"""
-    
-    def __init__(self, config: LLMConfig):
-        super().__init__(config)
-        try:
-            import requests
-            self.session = requests.Session()
-            if config.api_key:
-                self.session.headers.update({"Authorization": f"Bearer {config.api_key}"})
-        except ImportError:
-            raise ImportError("requests package required. Install with: pip install requests")
-    
-    def generate(self, user_prompt: str, system_prompt: Optional[str] = None) -> str:
-        try:
-            full_prompt = user_prompt
-            if system_prompt:
-                full_prompt = f"{system_prompt}\n\n{user_prompt}"
-            
-            api_url = self.config.base_url or f"https://api-inference.huggingface.co/models/{self.config.model_name}"
-            
-            payload = {
-                "inputs": full_prompt,
-                "parameters": {
-                    "temperature": self.config.temperature,
-                    "max_new_tokens": self.config.max_tokens,
-                    "return_full_text": False
-                }
-            }
-            
-            response = self.session.post(api_url, json=payload, timeout=self.config.timeout)
-            response.raise_for_status()
-            
-            result = response.json()
-            if isinstance(result, list) and len(result) > 0:
-                return result[0].get("generated_text", "")
-            elif isinstance(result, dict):
-                return result.get("generated_text", "")
-            else:
-                return str(result)
-                
-        except Exception as e:
-            logger.error(f"Hugging Face generation failed: {e}")
-            raise
-    
-    def _validate_config(self):
-        if not self.config.api_key:
-            self.config.api_key = os.getenv("HUGGINGFACE_API_KEY")
-        if not self.config.model_name:
-            self.config.model_name = "microsoft/DialoGPT-large"
-
-class OllamaProvider(LLMInterface):
-    """Ollama local provider"""
-    
-    def __init__(self, config: LLMConfig):
-        super().__init__(config)
-        try:
-            import requests
-            self.session = requests.Session()
-        except ImportError:
-            raise ImportError("requests package required. Install with: pip install requests")
-    
-    def generate(self, user_prompt: str, system_prompt: Optional[str] = None) -> str:
-        try:
-            api_url = self.config.base_url or "http://localhost:11434/api/generate"
-            
-            payload = {
-                "model": self.config.model_name,
-                "prompt": user_prompt,
-                "system": system_prompt,
-                "stream": False,
-                "options": {
-                    "temperature": self.config.temperature,
-                    "num_predict": self.config.max_tokens,
-                }
-            }
-            
-            response = self.session.post(api_url, json=payload, timeout=self.config.timeout)
-            response.raise_for_status()
-            
-            result = response.json()
-            return result.get("response", "")
-                
-        except Exception as e:
-            logger.error(f"Ollama generation failed: {e}")
-            raise
-    
-    def _validate_config(self):
-        if not self.config.model_name:
-            self.config.model_name = "llama2"
-        if not self.config.base_url:
-            self.config.base_url = "http://localhost:11434/api/generate"
-
 class LLMFactory:
     """Factory for creating LLM providers"""
     
@@ -431,8 +316,6 @@ class LLMFactory:
         LLMProvider.ANTHROPIC: AnthropicProvider,
         LLMProvider.GENAI: GenAIProvider,
         LLMProvider.COHERE: CohereProvider,
-        LLMProvider.HUGGINGFACE: HuggingFaceProvider,
-        LLMProvider.OLLAMA: OllamaProvider,
     }
     
     @classmethod
@@ -456,7 +339,6 @@ class LLMFactory:
         config = LLMConfig(
             provider=provider,
             model_name=config_dict.get("model_name", ""),
-            api_key=config_dict.get("api_key"),
             base_url=config_dict.get("base_url"),
             temperature=config_dict.get("temperature", 0.7),
             max_tokens=config_dict.get("max_tokens", 2000),
@@ -472,6 +354,47 @@ class LLMAgent(ABC):
     def __init__(self, name: str, llm_provider: LLMInterface):
         self.name = name
         self.llm = llm_provider
+
+
+def _extract_section(pddl_text: str, section_name: str) -> List[str]:
+    """Extract items from a PDDL section"""
+    pattern = rf'\(:{section_name}([^)]*)\)'
+    match = re.search(pattern, pddl_text, re.DOTALL)
+    if match:
+        content = match.group(1).strip()
+        return [item.strip() for item in content.split() if item.strip()]
+    return []
+
+
+def _extract_actions(pddl_text: str) -> List[str]:
+    """Extract action definitions"""
+    action_pattern = r'\(:action[^)]*(?:\([^)]*\)[^)]*)*\)'
+    matches = re.findall(action_pattern, pddl_text, re.DOTALL)
+    return matches
+
+
+def _parse_pddl_domain(pddl_text: str) -> PDDLDomain:
+    """Parse PDDL text into structured domain object"""
+    # Simple regex-based parsing (could be enhanced with proper PDDL parser)
+    domain_name_match = re.search(r'\(define \(domain ([^)]+)\)', pddl_text)
+    domain_name = domain_name_match.group(1) if domain_name_match else "unknown"
+
+    types = _extract_section(pddl_text, "types")
+    constants = _extract_section(pddl_text, "constants")
+    predicates = _extract_section(pddl_text, "predicates")
+    functions = _extract_section(pddl_text, "functions")
+    actions = _extract_actions(pddl_text)
+
+    return PDDLDomain(
+        domain_name=domain_name,
+        types=types,
+        constants=constants,
+        predicates=predicates,
+        functions=functions,
+        actions=actions,
+        raw_text=pddl_text
+    )
+
 
 class FormalizerAgent(LLMAgent):
     """Agent responsible for formalizing natural language to PDDL"""
@@ -500,7 +423,8 @@ Guidelines:
 Generate a complete PDDL domain definition:"""
         
         pddl_text = self.llm.generate(prompt, self.system_prompt)
-        return self._parse_pddl_domain(pddl_text, natural_language_description)
+        logger.debug(f"========================\n[{self.name}] Generated PDDL text after initial formalization:\n {pddl_text}\n========================")
+        return _parse_pddl_domain(pddl_text)
     
     def re_formalization(self, original_description: str, feedback_prompt: str) -> PDDLDomain:
         """Re-formalize based on investigator feedback"""
@@ -514,45 +438,9 @@ Issues Found and Feedback:
 Please generate an improved PDDL domain that addresses all the identified issues while maintaining the core functionality described in the original description:"""
         
         pddl_text = self.llm.generate(prompt, self.system_prompt)
-        return self._parse_pddl_domain(pddl_text, original_description)
-    
-    def _parse_pddl_domain(self, pddl_text: str, original_description: str) -> PDDLDomain:
-        """Parse PDDL text into structured domain object"""
-        # Simple regex-based parsing (could be enhanced with proper PDDL parser)
-        domain_name_match = re.search(r'\(define \(domain ([^)]+)\)', pddl_text)
-        domain_name = domain_name_match.group(1) if domain_name_match else "unknown"
-        
-        types = self._extract_section(pddl_text, "types")
-        constants = self._extract_section(pddl_text, "constants")
-        predicates = self._extract_section(pddl_text, "predicates")
-        functions = self._extract_section(pddl_text, "functions")
-        actions = self._extract_actions(pddl_text)
-        
-        return PDDLDomain(
-            domain_name=domain_name,
-            types=types,
-            constants=constants,
-            predicates=predicates,
-            functions=functions,
-            actions=actions,
-            raw_text=pddl_text
-        )
-    
-    def _extract_section(self, pddl_text: str, section_name: str) -> List[str]:
-        """Extract items from a PDDL section"""
-        pattern = rf'\(:{section_name}([^)]*)\)'
-        match = re.search(pattern, pddl_text, re.DOTALL)
-        if match:
-            content = match.group(1).strip()
-            return [item.strip() for item in content.split() if item.strip()]
-        return []
-    
-    def _extract_actions(self, pddl_text: str) -> List[str]:
-        """Extract action definitions"""
-        actions = []
-        action_pattern = r'\(:action[^)]*(?:\([^)]*\)[^)]*)*\)'
-        matches = re.findall(action_pattern, pddl_text, re.DOTALL)
-        return matches
+        logger.debug(f"========================\n[{self.name}] Generated PDDL text after re-formalization:\n {pddl_text}\n========================")
+        return _parse_pddl_domain(pddl_text)
+
 
 class SuccessRateCritic(LLMAgent):
     """Agent that evaluates how well the PDDL domain matches the description"""
@@ -621,8 +509,8 @@ CONCERNS: [List specific issues or areas for improvement, one per line]"""
                 passes_threshold=success_rate >= self.threshold,
                 specific_concerns=concerns
             )
-        except Exception as e:
-            logger.error(f"Failed to parse evaluation response: {e}")
+        except Exception as err:
+            logger.error(f"Failed to parse evaluation response: {err}")
             # Return default evaluation
             return SuccessRateEvaluation(
                 success_rate=0.5,
@@ -669,6 +557,7 @@ SUGGESTION: [How to fix this issue]
 If no issues are found, respond with "NO_ISSUES_FOUND"."""
         
         response = self.llm.generate(prompt, self.system_prompt)
+        logger.debug(f"========================\n[{self.name}] Investigation Response:\n {response}\n========================")
         return self._parse_investigation_response(response)
     
     def _parse_investigation_response(self, response: str) -> InvestigationReport:
@@ -746,6 +635,7 @@ Focus on these aspects:
 Format: ISSUE: / SEVERITY: / SUGGESTION: / --- (repeat)"""
         
         response = self.llm.generate(prompt, self.system_prompt)
+        logger.debug(f"========================\n[{self.name}] Investigation Response:\n {response}\n========================")
         return self._parse_investigation_response(response)
 
 class EffectsAndPreconditionsInvestigator(InvestigatorAgent):
@@ -774,6 +664,7 @@ Focus on these aspects:
 Format: ISSUE: / SEVERITY: / SUGGESTION: / --- (repeat)"""
         
         response = self.llm.generate(prompt, self.system_prompt)
+        logger.debug(f"========================\n[{self.name}] Investigation Response:\n {response}\n========================")
         return self._parse_investigation_response(response)
 
 class TypingInvestigator(InvestigatorAgent):
@@ -802,6 +693,7 @@ Focus on these aspects:
 Format: ISSUE: / SEVERITY: / SUGGESTION: / --- (repeat)"""
         
         response = self.llm.generate(prompt, self.system_prompt)
+        logger.debug(f"========================\n[{self.name}] Investigation Response:\n {response}\n========================")
         return self._parse_investigation_response(response)
 
 class Combinator:
@@ -840,6 +732,24 @@ class Combinator:
 
         return "\n".join(feedback_parts)
 
+
+def _get_default_configs() -> Dict[str, LLMConfig]:
+    """Get default LLM configurations"""
+    default_config = LLMConfig(
+        provider=LLMProvider.OPENAI,
+        model_name="gpt-4",
+        temperature=0.7,
+        max_tokens=2000
+    )
+
+    return {
+        'default': default_config,
+        'formalizer': default_config,
+        'critic': default_config,
+        'investigator': default_config
+    }
+
+
 class PDDLGeneratorSystem:
     """Main orchestrator for the multi-agent PDDL generation system"""
     
@@ -852,7 +762,7 @@ class PDDLGeneratorSystem:
         
         # Set up default LLM configurations if none provided
         if llm_configs is None:
-            llm_configs = self._get_default_configs()
+            llm_configs = _get_default_configs()
         
         # Create LLM providers
         self.llm_providers = {}
@@ -873,23 +783,7 @@ class PDDLGeneratorSystem:
             TypingInvestigator(self.llm_providers.get('investigator', self.llm_providers['default']))
         ]
         self.combinator = Combinator()
-    
-    def _get_default_configs(self) -> Dict[str, LLMConfig]:
-        """Get default LLM configurations"""
-        default_config = LLMConfig(
-            provider=LLMProvider.OPENAI,
-            model_name="gpt-4",
-            temperature=0.7,
-            max_tokens=2000
-        )
-        
-        return {
-            'default': default_config,
-            'formalizer': default_config,
-            'critic': default_config,
-            'investigator': default_config
-        }
-    
+
     @classmethod
     def create_with_single_provider(cls, provider_config: LLMConfig, **kwargs) -> 'PDDLGeneratorSystem':
         """Create system using single LLM provider for all agents"""
@@ -1005,18 +899,23 @@ parser.add_argument(
     action='store_true',
     help="Use mixed provider configuration ."
 )
+parser.add_argument(
+    '--description',
+    type=str,
+    help=f"Path to the description of the problem in natural language"
+)
 
 
-def create_system_from_config_file(config_path: str) -> PDDLGeneratorSystem:
+def create_system_from_config_file(config_file: str) -> PDDLGeneratorSystem:
     """Create PDDL generator system from JSON configuration file"""
-    with open(config_path, 'r') as f:
+    with open(config_file, 'r') as f:
         config_data = json.load(f)
 
     llm_configs = {}
     for role, config_dict in config_data.get('llm_configs', {}).items():
         llm_configs[role] = LLMFactory.create_from_dict(config_dict)
 
-    return PDDLGeneratorSystem.create_with_mixed_providers(default_config=llm_configs.get('default', None),
+    return PDDLGeneratorSystem.create_with_mixed_providers(default_config=llm_configs.get('default', LLMConfig(provider=LLMProvider.OPENAI, model_name="gpt-4", temperature=0.7, max_tokens=2000)),
                                                             formalizer_config=llm_configs.get('formalizer', None),
                                                             critic_config=llm_configs.get('critic', None),
                                                             investigator_config=llm_configs.get('investigator', None),
@@ -1027,6 +926,7 @@ def create_system_from_config_file(config_path: str) -> PDDLGeneratorSystem:
 if __name__ == "__main__":
     llm_system = None
     args = parser.parse_args()
+    load_dotenv()  # Load environment variables from .env file if it exists
 
     # if for some reason user tries to use both mixed and config, raise an error
     if args.mixed and args.config:
@@ -1037,7 +937,6 @@ if __name__ == "__main__":
         gpt4_config = LLMConfig(
             provider=LLMProvider.OPENAI,
             model_name="gpt-4",
-            api_key="your-openai-api-key",  # or set OPENAI_API_KEY env var
             temperature=0.7,
             max_tokens=2000
         )
@@ -1068,7 +967,6 @@ if __name__ == "__main__":
             'default': LLMConfig(
                 provider=LLMProvider.OPENAI,
                 model_name="gpt-4",
-                api_key="your-openai-api-key",  # or set OPENAI_API_KEY env var
                 temperature=0.7,
                 max_tokens=2000
             )
@@ -1090,27 +988,35 @@ if __name__ == "__main__":
 
         llm_system = create_system_from_config_file(config_path)
 
-    # Example natural language description
-    description = """
+    # Example natural language description, this is used by default, switch to your own description if you want
+    problem_desc = """
     This is a domain where we have blocks and a table. 
     Blocks can be stacked on top of each other or placed on the table. 
     The goal is to move blocks from one configuration to another.
     We need actions to pick up blocks, put them down, and stack them.
     A robot arm can only hold one block at a time.
     """
+    if args.description:
+        # read the description from the file given in the command line argument
+        with open(args.description, 'r') as f:
+            problem_desc = f.read().strip()
     
     # Choose which system to use (comment out others for testing)
     print("\n=== Generating PDDL with selected system ===")
     
     try:
         # Use one of the systems - change this line to test different providers
-        result = llm_system.generate_pddl(description)
+        result = llm_system.generate_pddl(problem_desc)
         print("Generated PDDL:")
         print(result)
+        # Save the result to a file named properly and with a timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"generated_pddl_{timestamp}.pddl"
+        with open(filename, 'w') as f:
+            f.write(result)
         
     except Exception as e:
         print(f"Error generating PDDL: {e}")
         print("Make sure you have:")
         print("1. Required packages installed (pip install openai anthropic google-generativeai cohere requests)")
         print("2. API keys set in environment variables or config")
-        print("3. For Ollama: local server running on http://localhost:11434")

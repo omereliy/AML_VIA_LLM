@@ -17,7 +17,6 @@ def check_api_keys():
         'OPENAI_API_KEY': 'OpenAI (ChatGPT/GPT-4)',
         'GOOGLE_API_KEY': 'Google (Gemini)',
         'COHERE_API_KEY': 'Cohere',
-        'OLLAMA_BASE_URL': 'Ollama (Local)'
     }
     
     print("🔑 API Key Configuration Status\n")
@@ -66,9 +65,6 @@ GOOGLE_API_KEY=your_api_key_here
 
 # Cohere - https://dashboard.cohere.com
 COHERE_API_KEY=your_api_key_here
-
-# Ollama (Local) - https://ollama.ai
-OLLAMA_BASE_URL=your_api_key_here
 """
     
     if not os.path.exists('.env'):
