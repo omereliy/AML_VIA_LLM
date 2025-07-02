@@ -8,6 +8,7 @@ from typing import List
 
 from llm_providers import LLMInterface
 from pddl_models import PDDLDomain, InvestigationReport, SuccessRateEvaluation, parse_pddl_domain
+from experiment_logging import get_experiment_logger
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,13 @@ Guidelines:
         """Convert natural language description to initial PDDL domain"""
         logger.info(f"[{self.name}] Starting initial formalization")
         
+        # Log to experiment conversation
+        exp_logger = get_experiment_logger()
+        if exp_logger:
+            agent_logger = exp_logger.get_agent_logger(self.name)
+            agent_logger.info("I'll convert this natural language description into an initial PDDL domain.")
+            agent_logger.info(f"Working with description: '{natural_language_description.strip()}'")
+        
         prompt = f"""Convert the following natural language description into a PDDL domain:
 
 {natural_language_description}
@@ -48,11 +56,23 @@ Generate a complete PDDL domain definition:"""
         
         pddl_text = self.llm.generate(prompt, self.system_prompt)
         logger.debug(f"========================\n[{self.name}] Generated PDDL text after initial formalization:\n {pddl_text}\n========================")
+        
+        if exp_logger:
+            agent_logger.info("Here's my initial PDDL formalization:")
+            agent_logger.info(f"\n{pddl_text}")
+        
         return parse_pddl_domain(pddl_text)
     
     def re_formalization(self, original_description: str, feedback_prompt: str) -> PDDLDomain:
         """Re-formalize based on investigator feedback"""
         logger.info(f"[{self.name}] Starting re-formalization with feedback")
+        
+        # Log to experiment conversation
+        exp_logger = get_experiment_logger()
+        if exp_logger:
+            agent_logger = exp_logger.get_agent_logger(self.name)
+            agent_logger.info("I've received feedback from the investigation team. Let me refine the PDDL domain.")
+            agent_logger.info("Analyzing the issues and incorporating improvements...")
         
         prompt = f"""Original Description: {original_description}
 
@@ -63,6 +83,11 @@ Please generate an improved PDDL domain that addresses all the identified issues
         
         pddl_text = self.llm.generate(prompt, self.system_prompt)
         logger.debug(f"========================\n[{self.name}] Generated PDDL text after re-formalization:\n {pddl_text}\n========================")
+        
+        if exp_logger:
+            agent_logger.info("Here's my refined PDDL domain addressing the feedback:")
+            agent_logger.info(f"\n{pddl_text}")
+        
         return parse_pddl_domain(pddl_text)
 
 
@@ -86,6 +111,13 @@ Provide a success rate between 0.0 and 1.0, detailed reasoning, and specific con
         """Evaluate the success rate of the formalization"""
         logger.info(f"[{self.name}] Evaluating domain against description")
         
+        # Log to experiment conversation
+        exp_logger = get_experiment_logger()
+        if exp_logger:
+            agent_logger = exp_logger.get_agent_logger(self.name)
+            agent_logger.info("I'm evaluating how well this PDDL domain matches the original description.")
+            agent_logger.info("Analyzing completeness, correctness, and appropriateness...")
+        
         prompt = f"""Evaluate how well this PDDL domain matches the natural language description:
 
 NATURAL LANGUAGE DESCRIPTION:
@@ -100,7 +132,18 @@ REASONING: [Detailed explanation of the score]
 CONCERNS: [List specific issues or areas for improvement, one per line]"""
         
         response = self.llm.generate(prompt, self.system_prompt)
-        return self._parse_evaluation_response(response)
+        evaluation = self._parse_evaluation_response(response)
+        
+        if exp_logger:
+            agent_logger.info(f"My evaluation: SUCCESS_RATE = {evaluation.success_rate:.2f}")
+            agent_logger.info(f"REASONING: {evaluation.reasoning}")
+            if evaluation.specific_concerns:
+                agent_logger.info("CONCERNS:")
+                for concern in evaluation.specific_concerns:
+                    agent_logger.info(f"  - {concern}")
+            agent_logger.info(f"Domain {'PASSES' if evaluation.passes_threshold else 'FAILS'} the success threshold ({self.threshold})")
+        
+        return evaluation
     
     def _parse_evaluation_response(self, response: str) -> SuccessRateEvaluation:
         """Parse the LLM evaluation response"""
@@ -164,6 +207,12 @@ Guidelines:
         """Investigate the domain for issues in the agent's specialty"""
         logger.info(f"[{self.name}] Investigating {self.focus_area}")
         
+        # Log to experiment conversation
+        exp_logger = get_experiment_logger()
+        if exp_logger:
+            agent_logger = exp_logger.get_agent_logger(self.name)
+            agent_logger.info(f"I'm investigating the PDDL domain for issues related to {self.focus_area}.")
+        
         prompt = f"""Analyze this PDDL domain for issues related to {self.focus_area}:
 
 ORIGINAL DESCRIPTION:
@@ -183,7 +232,21 @@ If no issues are found, respond with "NO_ISSUES_FOUND"."""
         
         response = self.llm.generate(prompt, self.system_prompt)
         logger.debug(f"========================\n[{self.name}] Investigation Response:\n {response}\n========================")
-        return self._parse_investigation_response(response)
+        
+        report = self._parse_investigation_response(response)
+        
+        if exp_logger:
+            if report.issues_found:
+                agent_logger.info(f"I found {len(report.issues_found)} issues in {self.focus_area}:")
+                for i, issue in enumerate(report.issues_found):
+                    severity = report.severity_scores[i] if i < len(report.severity_scores) else 0.5
+                    suggestion = report.suggestions[i] if i < len(report.suggestions) else "No suggestion provided"
+                    agent_logger.info(f"  Issue {i+1} (severity {severity:.2f}): {issue}")
+                    agent_logger.info(f"    Suggestion: {suggestion}")
+            else:
+                agent_logger.info(f"No issues found in {self.focus_area}. The domain looks good from my perspective.")
+        
+        return report
     
     def _parse_investigation_response(self, response: str) -> InvestigationReport:
         """Parse the LLM investigation response"""
