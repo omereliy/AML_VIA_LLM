@@ -3,12 +3,13 @@ Main system orchestrator for the multi-agent PDDL generation system
 """
 
 import logging
-from typing import Dict, Optional
+from typing import Dict
 
-from llm_providers import LLMInterface, LLMConfig, LLMFactory, get_default_configs
-from agents import FormalizerAgent, SuccessRateCritic, ActionSignatureInvestigator, EffectsAndPreconditionsInvestigator, TypingInvestigator, Combinator
-from pddl_models import PDDLDomain
+from agents import FormalizerAgent, SuccessRateCritic, ActionSignatureInvestigator, EffectsAndPreconditionsInvestigator, \
+    TypingInvestigator, Combinator
 from config import DEFAULT_MAX_ITERATIONS
+from llm_providers import LLMConfig, LLMFactory, get_default_configs
+from pddl_models import PDDLDomain
 
 logger = logging.getLogger(__name__)
 
