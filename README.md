@@ -1,4 +1,4 @@
-# Multi-Agent LLM System for PDDL Domain Generation
+# Multi-Agent LLM Refinement for Action Model learning
 
 A multi-agent system that uses Large Language Models to generate PDDL (Planning Domain Definition Language) domains from natural language descriptions through iterative refinement and error detection.
 
@@ -13,7 +13,7 @@ The system converts textual descriptions of planning domains into formal PDDL do
 ## Architecture
 
 ### Agents
-- **Formalizer**: Converts textual descriptions to PDDL format and re-formalizes based on feedback
+- **Formalizer**: Converts textual descriptions to PDDL format and re-formalizes if needed based on feedback
 - **Success Rate Critic**: Evaluates domain quality and acts as gatekeeper for iteration threshold
 - **Investigators**: Three specialized agents for error detection:
   - Action Signature Investigator
@@ -32,7 +32,7 @@ The system converts textual descriptions of planning domains into formal PDDL do
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
+git clone https://github.com/omereliy/AML_VIA_LLM.git
 cd AML_VIA_LLM
 ```
 
@@ -53,24 +53,24 @@ cp .env.example .env
 
 Run the system with default uniform configuration (all agents use GPT-4):
 ```bash
-python cli.py --input "your domain description"
+python cli.py --description <path-to-problem-description>
 ```
 
 Use mixed configuration (different models for different agents):
 ```bash
-python cli.py --mixed --input "your domain description"
+python cli.py --mixed --description <path-to-problem-description>
 ```
 
 Use custom configuration file:
 ```bash
-python cli.py --config config.json --input "your domain description"
+python cli.py --config <path-to-config.json> --description <path-to-problem-description>
 ```
 
-### Configuration Options
+### More Argument Options
 
 - `--success-threshold`: Minimum success rate to stop iterations (default: 0.8)
 - `--max-iterations`: Maximum refinement iterations (default: 10)
-- `--output`: Output file path for generated PDDL
+- `--output` or `-O`: Output file path for generated PDDL
 
 ### Custom Configuration Format
 
@@ -104,8 +104,10 @@ AML_VIA_LLM/
 ├── pddl_generator.py      # Core PDDL generation logic
 ├── pddl_models.py         # PDDL data models
 ├── system.py              # Main system orchestrator
-├── bug_detection/         # Specialized investigator modules
 ├── requirements.txt       # Python dependencies
+├── .env.example           # Environment variable template
+├── README.md              # Project documentation
+├── Related Work/          # Related research papers and links
 └── Misc/                  # Documentation and diagrams
 ```
 

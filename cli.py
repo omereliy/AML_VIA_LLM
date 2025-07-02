@@ -73,18 +73,39 @@ API keys will default to environment variables if not provided.
         type=str,
         help="Path to the description of the problem in natural language"
     )
+    parser.add_argument(
+        '-O','--output',
+        type=str,
+        default=None,
+        help="Output directory to save the generated PDDL file. Defaults to current directory."
+    )
+    parser.add_argument(
+        '--max-iterations',
+        type=int,
+        default=DEFAULT_MAX_ITERATIONS,
+        help="Maximum number of iterations for the PDDL generation process. Default is 3. Minimum is 0."
+    )
+    parser.add_argument(
+        '--success-threshold',
+        type=float,
+        default=DEFAULT_SUCCESS_THRESHOLD,
+        help="Success threshold for the PDDL generation process. Default is 0.95. Minimum is 0. Maximum is 1."
+    )
     
     return parser
 
 
-def create_system_from_config_file(config_file: str) -> PDDLGeneratorSystem:
-    """Create PDDL generator system from JSON configuration file"""
+def create_system_from_config_file(config_file: str, success_threshold: int, max_iterations: int) -> PDDLGeneratorSystem:
+    """Create PDDL generator system from flat JSON configuration file (no llm_configs nesting)"""
     with open(config_file, 'r') as f:
         config_data = json.load(f)
 
+    llm_roles = ['default', 'formalizer', 'critic', 'investigator']
     llm_configs = {}
-    for role, config_dict in config_data.get('llm_configs', {}).items():
-        llm_configs[role] = LLMFactory.create_from_dict(config_dict)
+
+    for role in llm_roles:
+        if role in config_data:
+            llm_configs[role] = LLMFactory.create_from_dict(config_data[role])
 
     return PDDLGeneratorSystem.create_with_mixed_providers(
         default_config=llm_configs.get('default', LLMConfig(
@@ -96,8 +117,8 @@ def create_system_from_config_file(config_file: str) -> PDDLGeneratorSystem:
         formalizer_config=llm_configs.get('formalizer', None),
         critic_config=llm_configs.get('critic', None),
         investigator_config=llm_configs.get('investigator', None),
-        success_threshold=config_data.get('success_threshold', DEFAULT_SUCCESS_THRESHOLD),
-        max_iterations=config_data.get('max_iterations', DEFAULT_MAX_ITERATIONS)
+        success_threshold=success_threshold,
+        max_iterations=max_iterations
     )
 
 
@@ -169,11 +190,11 @@ def get_problem_description(args) -> str:
     """
 
 
-def save_result(result: str) -> str:
+def save_result(result: str, output_path: str or None) -> str:
     """Save the generated PDDL to a timestamped file"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"generated_pddl_{timestamp}.pddl"
-    out_dir = Path(config.OUT_DIR) if config.OUT_DIR else Path(".")
+    out_dir = Path(output_path) if output_path else Path(".")
     file_path = out_dir / filename
     with open(str(file_path), 'w') as f:
         f.write(result)
@@ -189,12 +210,16 @@ def main():
     # Validate arguments
     if args.mixed and args.config:
         raise ValueError("Cannot use both --mixed and --config. Choose one configuration method.")
+    if args.success_threshold < 0 or args.success_threshold > 1:
+        raise ValueError("Success threshold must be between 0 and 1.")
+    if args.max_iterations <= 0:
+        raise ValueError("Maximum iterations must be a positive integer.")
 
     # Create system based on configuration
     if args.config:
         if not os.path.exists(args.config):
             raise FileNotFoundError(f"Configuration file not found: {args.config}")
-        llm_system = create_system_from_config_file(args.config)
+        llm_system = create_system_from_config_file(args.config,args.success_threshold,args.max_iterations)
     elif args.mixed:
         llm_system = create_mixed_system()
     else:
@@ -210,7 +235,7 @@ def main():
         print("Generated PDDL:")
         print(result)
         
-        filename = save_result(result)
+        filename = save_result(result,args.output)
         print(f"\nResult saved to: {filename}")
         
     except Exception as e:
