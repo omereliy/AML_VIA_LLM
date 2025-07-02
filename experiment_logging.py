@@ -3,7 +3,6 @@ Experiment logging configuration for PDDL generation conversations
 """
 
 import logging
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional

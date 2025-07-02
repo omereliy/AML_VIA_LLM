@@ -7,10 +7,7 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
-
 from dotenv import load_dotenv
-
-import config
 from config import LLMProvider, DEFAULT_SUCCESS_THRESHOLD, DEFAULT_MAX_ITERATIONS
 from llm_providers import LLMConfig, LLMFactory
 from system import PDDLGeneratorSystem

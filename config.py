@@ -1,7 +1,6 @@
 """
 Configuration constants and defaults for the PDDL Generator System
 """
-import os
 from enum import Enum
 from typing import List
 from dotenv import load_dotenv
