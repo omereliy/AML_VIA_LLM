@@ -1,0 +1,30 @@
+{
+  "llm_configs": {
+    "default": {
+      "provider": "anthropic",
+      "model_name": "claude-3-5-sonnet-20241022",
+      "temperature": 0.7,
+      "max_tokens": 2000
+    },
+    "formalizer": {
+      "provider": "anthropic", 
+      "model_name": "claude-3-5-sonnet-20241022",
+      "temperature": 0.7,
+      "max_tokens": 2000
+    },
+    "critic": {
+      "provider": "anthropic",
+      "model_name": "claude-3-5-sonnet-20241022", 
+      "temperature": 0.7,
+      "max_tokens": 2000
+    },
+    "investigator": {
+      "provider": "anthropic",
+      "model_name": "claude-3-5-sonnet-20241022",
+      "temperature": 0.7,
+      "max_tokens": 2000
+    }
+  },
+  "success_threshold": 0.95,
+  "max_iterations": 15
+}

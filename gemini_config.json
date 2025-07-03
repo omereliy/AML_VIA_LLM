@@ -1,0 +1,30 @@
+{
+  "llm_configs": {
+    "default": {
+      "provider": "genai",
+      "model_name": "gemini-1.5-flash",
+      "temperature": 0.7,
+      "max_tokens": 2000
+    },
+    "formalizer": {
+      "provider": "genai",
+      "model_name": "gemini-1.5-flash", 
+      "temperature": 0.7,
+      "max_tokens": 2000
+    },
+    "critic": {
+      "provider": "genai",
+      "model_name": "gemini-1.5-flash",
+      "temperature": 0.7,
+      "max_tokens": 2000
+    },
+    "investigator": {
+      "provider": "genai",
+      "model_name": "gemini-1.5-flash",
+      "temperature": 0.7,
+      "max_tokens": 2000
+    }
+  },
+  "success_threshold": 0.95,
+  "max_iterations": 15
+}

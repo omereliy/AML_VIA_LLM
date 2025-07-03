@@ -1,0 +1,8 @@
+This is a domain where two players alternate turns placing marks on a 3x3 grid.  
+Each cell may be empty, contain an X, or contain an O.  
+The goal is to align three of one’s marks in a row, column, or diagonal.  
+The game starts with an empty grid.  
+Players take turns placing their symbol in any empty cell.  
+Once a cell is marked, it cannot be changed.  
+The game ends when a player wins or the board is full.  
+Only one player may act on a given turn.

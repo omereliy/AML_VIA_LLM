@@ -1,0 +1,7 @@
+This is a domain where arriving flights must be assigned to available gates in an airport.  
+Each flight has an arrival time, size, and required turnaround duration.  
+Gates vary in capacity and compatibility with aircraft types.  
+The goal is to allocate all incoming flights to valid gates without conflict.  
+Actions include assigning a flight to a gate, delaying assignment, or rerouting.  
+Only one flight can occupy a gate at a time, and gates must be available during the entire turnaround.  
+Assignments must account for constraints such as airline preferences and adjacent gate usage.
