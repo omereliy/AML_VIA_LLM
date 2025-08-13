@@ -1,0 +1,7 @@
+This is a domain where shelves in a pharmacy hold various medications, each identified by type and expiration date.  
+The goal is to keep shelves organized and ensure no expired items remain in stock.  
+Each medication can be moved, disposed of, or restocked.  
+Only available space on a shelf can be used to store new items.  
+Medications must be checked regularly for expiration.  
+A staff member can only handle one medication box at a time.  
+Stocking requires retrieving items from the supply room and placing them onto correct shelves.

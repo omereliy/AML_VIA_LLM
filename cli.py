@@ -110,7 +110,21 @@ def create_system_from_config_file(config_file: str) -> PDDLGeneratorSystem:
 
     llm_configs = {}
     for role, config_dict in config_data.get('llm_configs', {}).items():
-        llm_configs[role] = LLMFactory.create_from_dict(config_dict)
+        # Create LLMConfig objects instead of LLMInterface instances
+        provider_name = config_dict.get("provider")
+        if isinstance(provider_name, str):
+            provider = LLMProvider(provider_name)
+        else:
+            provider = provider_name
+        
+        llm_configs[role] = LLMConfig(
+            provider=provider,
+            model_name=config_dict.get("model_name", ""),
+            base_url=config_dict.get("base_url"),
+            temperature=config_dict.get("temperature", 0.7),
+            max_tokens=config_dict.get("max_tokens", 2000),
+            timeout=config_dict.get("timeout", 30)
+        )
 
     return PDDLGeneratorSystem.create_with_mixed_providers(
         default_config=llm_configs.get('default', LLMConfig(

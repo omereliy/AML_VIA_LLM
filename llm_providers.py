@@ -35,7 +35,6 @@ class LLMConfig:
                 "gpt4": "OPENAI_API_KEY",
                 "anthropic": "ANTHROPIC_API_KEY", 
                 "genai": "GOOGLE_API_KEY",
-                "cohere": "COHERE_API_KEY"
             }
             
             env_var_name = env_key_mapping.get(self.provider.value, f"{self.provider.value.upper()}_API_KEY")
@@ -180,44 +179,7 @@ class GenAIProvider(LLMInterface):
         if not self.config.api_key:
             raise ValueError("Google API key required")
         if not self.config.model_name:
-            self.config.model_name = "gemini-pro"
-
-
-class CohereProvider(LLMInterface):
-    """Cohere provider"""
-    
-    def __init__(self, config: LLMConfig):
-        super().__init__(config)
-        try:
-            import cohere
-            self.client = cohere.Client(api_key=config.api_key)
-        except ImportError:
-            raise ImportError("cohere package required. Install with: pip install cohere")
-    
-    def generate(self, user_prompt: str, system_prompt: Optional[str] = None) -> str:
-        try:
-            full_prompt = user_prompt
-            if system_prompt:
-                full_prompt = f"{system_prompt}\n\n{user_prompt}"
-            
-            response = self.client.generate(
-                model=self.config.model_name,
-                prompt=full_prompt,
-                temperature=self.config.temperature,
-                max_tokens=self.config.max_tokens,
-            )
-            return response.generations[0].text
-        except Exception as err:
-            logger.error(f"Cohere generation failed: {err}")
-            raise
-    
-    def _validate_config(self):
-        if not self.config.api_key:
-            self.config.api_key = os.getenv("COHERE_API_KEY")
-        if not self.config.api_key:
-            raise ValueError("Cohere API key required")
-        if not self.config.model_name:
-            self.config.model_name = "command"
+            self.config.model_name = "gemini-1.5-flash"
 
 
 class LLMFactory:
@@ -227,7 +189,6 @@ class LLMFactory:
         LLMProvider.OPENAI: OpenAIProvider,
         LLMProvider.ANTHROPIC: AnthropicProvider,
         LLMProvider.GENAI: GenAIProvider,
-        LLMProvider.COHERE: CohereProvider,
     }
     
     @classmethod

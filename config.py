@@ -8,8 +8,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # HYPERPARAMETERS
-DEFAULT_SUCCESS_THRESHOLD = 0.95
-DEFAULT_MAX_ITERATIONS = 3
+DEFAULT_SUCCESS_THRESHOLD = 0.985
+DEFAULT_MAX_ITERATIONS = 15
 
 
 class LLMProvider(Enum):
@@ -17,7 +17,6 @@ class LLMProvider(Enum):
     OPENAI = "gpt4"
     ANTHROPIC = "anthropic"
     GENAI = "genai"
-    COHERE = "cohere"
 
     @classmethod
     def get_providers(cls) -> List[str]:
@@ -49,10 +48,5 @@ PROVIDER_TO_MODEL_LIST = {
         "gemini-2.0-flash-lite",                # Gemini Flash Lite, multimodal
         "gemini-1.5-flash",                     # Gemini Flash, multimodal
         "gemini-1.5-pro",                       # Gemini Pro, multimodal
-    ],
-    LLMProvider.COHERE: [
-        "command-a-03-2025",                    # Command-A 03, text
-        "command-r7b-12-2024",                  # Command-r7b, faster and cheaper
-        "command-r-plus",                       # Command-R+, more expensive but better quality
     ],
 }

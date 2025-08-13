@@ -1,0 +1,7 @@
+This is a domain involving a cube composed of six colored faces, each subdivided into nine tiles.  
+Each tile can hold one color, and the cube's faces can be rotated independently.  
+The goal is to manipulate the cube so that all tiles on each face match in color.  
+We need actions to rotate individual faces clockwise or counterclockwise.  
+A rotation changes the positions of edge and corner tiles across adjacent faces.  
+Only one face can be rotated at a time.  
+The cube starts in a mixed state, and the solution requires ordered sequences of rotations.

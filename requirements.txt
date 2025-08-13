@@ -1,7 +1,6 @@
 # Core LLM Provider libraries
 openai==0.27.8
 anthropic==0.16.0
-cohere==5.11.0
-
+google-generativeai==0.8.3
 # Environment and configuration
 python-dotenv==1.0.1
