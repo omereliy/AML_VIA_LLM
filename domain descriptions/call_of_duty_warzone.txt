@@ -1,0 +1,8 @@
+This is a domain where agents are deployed into a battle zone segmented into discrete grid locations.  
+Agents can move, loot, shoot, and interact with environmental objects.  
+Each agent has a limited inventory, a health level, and a current location.  
+The goal is to eliminate all enemies while surviving and staying within a shrinking safe zone.  
+Actions include moving to adjacent tiles, picking up gear, engaging an enemy, or using a resource.  
+Combat outcomes depend on weapon type, distance, and enemy state.  
+An agent must be alive and have a weapon to attack.  
+The environment evolves with time, reducing the playable area to encourage conflict.

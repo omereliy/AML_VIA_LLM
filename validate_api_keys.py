@@ -20,7 +20,6 @@ def check_api_key_format(key: str, provider: str) -> bool:
         'anthropic': key.startswith('sk-ant-'),
         'openai': key.startswith('sk-'),
         'google': len(key) > 20,  # Google keys are typically longer
-        'cohere': len(key) > 20   # Cohere keys are typically longer
     }
     
     return format_checks.get(provider.lower(), len(key) > 10)
@@ -67,30 +66,12 @@ def validate_google_key(api_key: str) -> Tuple[bool, str]:
     try:
         import google.generativeai as genai
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel('gemini-1.5-flash')
         # Simple test call
         response = model.generate_content("Hi")
         return True, "Connected successfully"
     except ImportError:
         return False, "google-generativeai package not installed"
-    except Exception as e:
-        return False, f"Connection failed: {str(e)[:50]}..."
-
-
-def validate_cohere_key(api_key: str) -> Tuple[bool, str]:
-    """Validate Cohere API key with a simple API call"""
-    try:
-        import cohere
-        client = cohere.Client(api_key=api_key)
-        # Simple test call
-        response = client.generate(
-            model='command',
-            prompt='Hi',
-            max_tokens=5
-        )
-        return True, "Connected successfully"
-    except ImportError:
-        return False, "cohere package not installed"
     except Exception as e:
         return False, f"Connection failed: {str(e)[:50]}..."
 
@@ -123,11 +104,6 @@ def validate_api_keys(test_connections: bool = True) -> Dict[str, Dict]:
             'validator': validate_google_key,
             'provider': 'google'
         },
-        'COHERE_API_KEY': {
-            'name': 'Cohere',
-            'validator': validate_cohere_key,
-            'provider': 'cohere'
-        }
     }
     
     results = {}
@@ -175,8 +151,6 @@ OPENAI_API_KEY=your_api_key_here
 # Google Gemini - https://aistudio.google.com
 GOOGLE_API_KEY=your_api_key_here
 
-# Cohere - https://dashboard.cohere.com
-COHERE_API_KEY=your_api_key_here
 '''
     
     if not os.path.exists('.env'):
