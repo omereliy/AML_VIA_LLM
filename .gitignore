@@ -1,7 +1,6 @@
 # IDE directory
 .idea/
-/experiments/
-/experiment_summary_20250703_002933.json
-/plotting_data.json
-/.env
-/success_rates_data.csv
+/experiments/*
+/*data.json
+/*.env
+/*.csv

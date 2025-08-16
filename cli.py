@@ -99,11 +99,17 @@ API keys will default to environment variables if not provided.
         default=DEFAULT_SUCCESS_THRESHOLD,
         help=f"Success threshold for critic evaluation (default: {DEFAULT_SUCCESS_THRESHOLD})"
     )
+    parser.add_argument(
+        '--ablation-mode',
+        choices=['baseline', 'iterative', 'investigators', 'full'],
+        default='full',
+        help="Ablation study mode: baseline (single-shot), iterative (critic feedback only), investigators (single iteration with specialists), full (complete system)"
+    )
     
     return parser
 
 
-def create_system_from_config_file(config_file: str) -> PDDLGeneratorSystem:
+def create_system_from_config_file(config_file: str, ablation_mode: str = "full") -> PDDLGeneratorSystem:
     """Create PDDL generator system from JSON configuration file"""
     with open(config_file, 'r') as f:
         config_data = json.load(f)
@@ -137,11 +143,12 @@ def create_system_from_config_file(config_file: str) -> PDDLGeneratorSystem:
         critic_config=llm_configs.get('critic', None),
         investigator_config=llm_configs.get('investigator', None),
         success_threshold=config_data.get('success_threshold', DEFAULT_SUCCESS_THRESHOLD),
-        max_iterations=config_data.get('max_iterations', DEFAULT_MAX_ITERATIONS)
+        max_iterations=config_data.get('max_iterations', DEFAULT_MAX_ITERATIONS),
+        ablation_mode=ablation_mode
     )
 
 
-def create_uniform_system() -> PDDLGeneratorSystem:
+def create_uniform_system(ablation_mode: str = "full") -> PDDLGeneratorSystem:
     """Create system with uniform GPT-4 configuration"""
     print("No configuration specified. Using default uniform configuration with gpt-4.")
     gpt4_config = LLMConfig(
@@ -153,11 +160,12 @@ def create_uniform_system() -> PDDLGeneratorSystem:
     return PDDLGeneratorSystem.create_with_single_provider(
         gpt4_config,
         success_threshold=DEFAULT_SUCCESS_THRESHOLD,
-        max_iterations=DEFAULT_MAX_ITERATIONS
+        max_iterations=DEFAULT_MAX_ITERATIONS,
+        ablation_mode=ablation_mode
     )
 
 
-def create_mixed_system() -> PDDLGeneratorSystem:
+def create_mixed_system(ablation_mode: str = "full") -> PDDLGeneratorSystem:
     """Create system with mixed providers"""
     print("Using mixed configuration with different providers for each agent.")
     mixed_configs = {
@@ -189,7 +197,8 @@ def create_mixed_system() -> PDDLGeneratorSystem:
         critic_config=mixed_configs['critic'],
         investigator_config=mixed_configs['investigator'],
         success_threshold=DEFAULT_SUCCESS_THRESHOLD,
-        max_iterations=DEFAULT_MAX_ITERATIONS
+        max_iterations=DEFAULT_MAX_ITERATIONS,
+        ablation_mode=ablation_mode
     )
 
 
@@ -258,11 +267,11 @@ def main():
     if args.config:
         if not os.path.exists(args.config):
             raise FileNotFoundError(f"Configuration file not found: {args.config}")
-        llm_system = create_system_from_config_file(args.config)
+        llm_system = create_system_from_config_file(args.config, args.ablation_mode)
     elif args.mixed:
-        llm_system = create_mixed_system()
+        llm_system = create_mixed_system(args.ablation_mode)
     else:
-        llm_system = create_uniform_system()
+        llm_system = create_uniform_system(args.ablation_mode)
     
     # Override system parameters if provided
     if hasattr(llm_system, 'max_iterations'):
@@ -276,6 +285,7 @@ def main():
     # Print experiment configuration
     print("\n=== PDDL Generation Experiment ===")
     print(f"Experiment name: {args.experiment_name or 'unnamed'}")
+    print(f"Ablation mode: {args.ablation_mode}")
     print(f"Max iterations: {args.max_iterations}")
     print(f"Success threshold: {args.success_threshold}")
     print(f"Output directory: {args.output_dir}")
@@ -294,7 +304,8 @@ def main():
             "max_iterations": args.max_iterations,
             "success_threshold": args.success_threshold,
             "configuration": "mixed" if args.mixed else ("custom" if args.config else "uniform"),
-            "description_source": "command line" if args.description else args.description_file
+            "description_source": "command line" if args.description else args.description_file,
+            "ablation_mode": args.ablation_mode
         }
         exp_logger.log_experiment_start(problem_desc, config_info)
         
