@@ -8,7 +8,6 @@ import os
 import re
 import json
 from collections import defaultdict
-from pathlib import Path
 
 
 def parse_success_rates_from_log(log_path):
@@ -185,7 +184,7 @@ def main():
         print(f"\nData ready for plotting! Use the JSON file: {output_file}")
         print("\nExample usage:")
         print("import json")
-        print("with open('plotting_data.json') as f:")
+        print(f'{"with"} {"open"} (plotting_data.json) as f:')
         print("    data = json.load(f)")
         print("# Then use data[domain][model]['success_rates'] and data[domain][model]['iterations'] for plotting")
     else:
