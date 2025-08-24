@@ -101,9 +101,9 @@ API keys will default to environment variables if not provided.
     )
     parser.add_argument(
         '--ablation-mode',
-        choices=['baseline', 'iterative', 'investigators', 'full'],
+        choices=['baseline', 'iterative', 'no-action-investigator', 'no-effects-investigator', 'no-typing-investigator', 'no-critic', 'full'],
         default='full',
-        help="Ablation study mode: baseline (single-shot), iterative (critic feedback only), investigators (single iteration with specialists), full (complete system)"
+        help="Ablation study mode: baseline (single-shot), iterative (critic feedback only), no-action-investigator (without ActionSignatureInvestigator), no-effects-investigator (without EffectsAndPreconditionsInvestigator), no-typing-investigator (without TypingInvestigator), no-critic (investigators without iterative refinement), full (complete system)"
     )
     
     return parser
